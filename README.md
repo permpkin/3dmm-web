@@ -9,9 +9,11 @@ No plugins, no emulation: the file-format and scene-playback code is a pure
 JavaScript port of the original 1995 engine behavior.
 
 > **Status: early.** This is a work in progress — expect bugs, missing
-> editor features and rough edges. Planned for future releases: support for
-> expansion-pack content including **Frankie's 3DMM Expansion Pack 1**, the
-> **Doraemon Expansion** and the **Nickelodeon Expansion**, and more TBD.
+> editor features and rough edges. Expansion-pack content (e.g. the
+> **Nickelodeon Expansion**) can be imported via `?packs=` — see
+> [asset packs](#asset-packs). Planned for future releases: built-in support
+> for **Frankie's 3DMM Expansion Pack 1**, the **Doraemon Expansion** and
+> more TBD.
 
 ## Features
 
@@ -80,6 +82,25 @@ A successful load replaces the autosaved working doc; a failed link falls
 back to the normal boot and shows an error. With no `?3mm=`, your working
 doc opens as usual (or a blank movie on first run).
 
+### MIDI sound
+
+Music in 3DMM is a MIDI event stream — the original played it through
+Windows' GM wavetable synth (`gm.dls`). This port renders the same events
+through a real SF2/SF3/DLS sound bank, so the music sounds the way it did
+in 1995 — including pitch bends, controllers and the full drum kit.
+
+Drop a bank file into `public/data/` (or `dist/data/` on a deployed build)
+and it is picked up automatically, checked in this order:
+
+1. `data/gm.dls` — the authentic choice; `C:\Windows\System32\drivers\gm.dls`
+   from any Windows install is the exact bank 3DMM used.
+2. `data/soundfont.dls` / `data/soundfont.sf3` / `data/soundfont.sf2` — any
+   General MIDI bank (`.sf3` is Vorbis-compressed, so it's smaller).
+3. `?sf=<url>` — overrides the list with a bank hosted anywhere.
+
+If no bank is found, music falls back to a small built-in oscillator synth
+(it plays the right notes, but not with the right instruments).
+
 ### View modes
 
 `mode` chooses how the movie opens, and works with or without `?3mm=` — no
@@ -97,6 +118,20 @@ movie param means your working doc is what plays:
 In theatre and embed modes, `Space` toggles play/pause. `?play` starts
 playback immediately in the editor (screen modes already autoplay).
 
+### Casting
+
+In theatre mode the **cast** link (top left, next to settings) hands the
+movie off to a Chromecast: the TV plays it while this window stays as the
+remote — the editor/theatre chrome never leaves your screen. Two caveats:
+
+- The movie must be **URL-loadable** — casting works with `?3mm=` movies,
+  not locally edited/autosaved docs (there's nothing for the TV to fetch).
+- It needs a registered CAF receiver application id. Register one at
+  [cast.google.com/publish](https://cast.google.com/publish), then pass it
+  via `?castid=` (or `localStorage.castAppId`). The receiver is
+  `receiver.html` in this repo — publish your deployment's URL in the
+  console. `receiver.html?3mm=...` also runs standalone for testing.
+
 ### Recipes
 
 | Link | Opens |
@@ -107,6 +142,44 @@ playback immediately in the editor (screen modes already autoplay).
 | `?mode=theatre` | your working doc in the theatre |
 | `?3mm=https://example.com/movie.3mm&scene=2&frame=30` | remote movie at scene index 2 / frame 30 |
 | `?3mm=https://example.com/movie.3mm&play&opts=fps24` | remote movie playing with smooth playback |
+| `?packs=https://example.com/nick` | editor reskinned by an interface pack |
+
+### Asset packs
+
+`?packs=` takes comma-separated URLs, each pointing to an `assets.json`
+manifest (a bare directory URL works too — `assets.json` is appended
+automatically). The manifest is an array of file paths relative to the
+manifest's URL — the files that make up an expansion pack, e.g.
+`expansions/NICK3D/assets.json`:
+
+```json
+["TMPLS.3CN", "BKGDS.3CN", "SNDS.3CN", "ACTOR.NTH", "PROP.NTH", "BKGDS.NTH"]
+```
+
+What each file does, routed by extension:
+
+- **`.3cn` / `.chk`** — a content library, registered with the engine. Its
+  actors, props, backgrounds, materials and sounds become available everywhere,
+  including in movies that tag them. `.chk` expansion patches also carry the
+  pack's palette: the first 256-entry `GLCR` color list found in the pack
+  becomes the palette its thumbnails are drawn with (list it before the
+  thumbnail files, as expansions like NICK3D index their own palette — the
+  wrong palette is why pack thumbs otherwise show inverted colors).
+- **`.3th` / `.nth`** — a thumbnail file; its entries are appended to the
+  actor/prop/background browsers and the spletter easels. This is how the
+  Nickelodeon expansion's `.NTH` files (ACTOR.NTH, PROP.NTH, …) slot in.
+- **`.png` / `.cur`** — UI texture / cursor overrides, matched by filename
+  (`button.png` replaces the stock button, and so on).
+
+Packs are additive — builtin content wins on cno collisions. To try the
+bundled Nickelodeon expansion locally:
+
+```
+http://localhost:5173/?packs=/expansions/NICK3D
+```
+
+(`vite.config.js` serves `expansions/` in dev; on a deployed site, host the
+pack somewhere CORS-enabled and use its URL instead.)
 
 ### Parameter reference
 
@@ -119,6 +192,10 @@ playback immediately in the editor (screen modes already autoplay).
 | `play` | Start playing immediately (`?play`). |
 | `opts` | Comma-separated renderer flags — `fps24`, `modernLighting`, `shadows`, `castOnOthers`, `selfShadow`, `smoothTex`, `smoothVerts`, `scale2x`, `aa`, `wireframe` (e.g. `?opts=fps24,shadows`). See [render settings](#render-settings). |
 | `menu` | Open the render settings dialog on boot (`?menu`). |
+| `packs` | Comma-separated `assets.json` URLs (or directories containing one) — imports [asset packs](#asset-packs) (e.g. `?packs=/expansions/NICK3D` locally, or a remote URL). |
+| `sf` | Sound bank URL for MIDI music (`.sf2`/`.sf3`/`.dls`) — overrides [auto-detection](#midi-sound). |
+| `lang` | UI language code (e.g. `?lang=fr`, or `auto` for the browser language) — loads `lang/<code>.json` over the bundled English strings; missing keys fall back to English. Drop additional `<code>.json` files into `public/lang/` to add a language (see `lang/en.json` for the key format). |
+| `castid` | Chromecast CAF receiver application id — overrides the built-in default for the **cast** link in theatre mode (see [casting](#casting)). |
 
 ## Render settings
 
@@ -190,9 +267,14 @@ Tests run on every PR and push via `.github/workflows/ci.yml`.
 src/format/    pure-JS Kauai format ports (chunky, movie, content, kcdc, wav, mids)
 src/engine/    scene/actor playback state, content library, sound queue, mat34
 src/render/    three.js renderer + canvas textbox layout
-src/main.js    app entry: player controls + studio editor chrome
+src/main.js    app entry: boot orchestrator — everything else lives in app/
+src/receiver.js Chromecast CAF receiver entry (receiver.html)
+src/app/       state (zustand), res, undo, boot, packs, thumbs, doc, loop,
+               opts, sndsrc, cast, i18n + edit/ (movie/sound/tbox mutations)
+src/app/ui/    the canvas UI — the only UI layer: UiRoot view stack, Element,
+               widgets, studio chrome, browsers, easels, bio, tips, theatre
 tools/         node CLI helpers for inspecting .3mm/.3cn files
-test/          node:test suite (unit + headless MoviePlayer integration)
+test/          vitest suite (unit + headless MoviePlayer integration)
 public/        game data files (content libs, thumbnails, UI art)
 ```
 
