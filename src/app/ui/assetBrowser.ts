@@ -12,12 +12,10 @@ import { playbackLoop } from '../playbackLoop.ts';
 import { soundSources} from '../soundSources.ts';
 import { thumbnails } from '../thumbnails.ts';
 import { localizer } from '../localization.ts';
-// The recorder entry is click-time only — a lazy easels import keeps this
-// module out of the easel import cycle.
+import { RecorderEasel } from './easels.ts';
 import { ModalView, modalSlot } from './modal.ts';
 import { CURSORS } from './cursorManager.ts';
 import { uiSounds } from './uiSounds.ts';
-const easels = () => import('./easels.ts');
 
 /** Per-kind browser layouts — book skin, grid geometry, and button slots,
  *  — the pickers' fixed 640x480 layouts. */
@@ -135,7 +133,7 @@ export class AssetBrowserView extends ModalView {
       modalSlot.close();                                              // (empty pick clears the tool sound)
     }, 'ok');
     makeButton('cancel', 'cancelc', def.x + def.cancelButton[0], def.y + def.cancelButton[1], 50, 48, () => importItems ? (modalSlot.close(), AssetBrowserView.show(kind)) : modalSlot.close(), 'cancel');
-    if (def.recordButton && !importItems) makeButton('mike', 'mikes', def.x + def.recordButton[0], def.y + def.recordButton[1], 50, 48, () => easels().then((m) => m.RecorderEasel.show(kind)), 'mike');
+    if (def.recordButton && !importItems) makeButton('mike', 'mikes', def.x + def.recordButton[0], def.y + def.recordButton[1], 50, 48, () => RecorderEasel.show(kind), 'mike');
     if (def.importButton && !importItems) makeButton('sndport', 'sndports', def.x + def.importButton[0], def.y + def.importButton[1], 50, 48, () => soundSources.importSoundFiles(kind), 'pfopen');
     this.invalidate();
   }
