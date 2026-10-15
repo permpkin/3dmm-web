@@ -5,7 +5,7 @@ import {
   ChunkyFile, readGL, readGG, readAL, readGST, buildGL, buildGG, buildGST,
   writeChunkyFile, unpack,
 } from '../src/format/chunky.ts';
-import { movieFile, readFile } from './helpers.ts';
+import { movieFile, readFile, remoteFile } from './helpers.ts';
 
 test('buildGL/readGL roundtrip', () => {
   const entries = [new Uint8Array([1, 2, 3, 4]), new Uint8Array([5, 6, 7, 8])];
@@ -101,12 +101,12 @@ test('unpack throws on unknown codec', () => {
   assert.throws(() => unpack(w), /unknown codec/);
 });
 
-test('real packed chunks decode from TMPLS.3CN (KCDC/KCD2)', () => {
-  const chunkyFile = new ChunkyFile(readFile('public/data/TMPLS.3CN'), 'TMPLS.3CN');
+test('real packed chunks decode from TMPLS.3CN (KCDC/KCD2)', async () => {
+  const chunkyFile = new ChunkyFile(await remoteFile('data/TMPLS.3CN'), 'TMPLS.3CN');
   const packed = [...chunkyFile.chunks.values()].filter((c) => c.packed);
   assert.ok(packed.length > 0, 'expected packed chunks in TMPLS.3CN');
   for (const c of packed.slice(0, 25)) {
     const raw = chunkyFile.data(c.ctg, c.cno);
     assert.ok(raw.length > 0, `${c.ctg}:${c.cno} decoded to empty`);
   }
-});
+}, 120000); // remote fetch — cold run downloads ~32MB

@@ -5,6 +5,7 @@
 import { STY } from '../format/content.ts';
 import { decodeWavAdpcm } from '../format/wav.ts';
 import { parseMids } from '../format/mids.ts';
+import { assetUrl } from '../app/resources.ts';
 
 /** Rough General-MIDI program -> [wave, attack, sustain, release] table for
  *  the oscillator fallback synth used when no soundfont is available. */
@@ -98,7 +99,7 @@ export class SoundQueue {
         const q = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sf');
         if (q) urls.push(q);
         const B = import.meta.env.BASE_URL;
-        for (const n of ['gm.dls', 'soundfont.dls', 'soundfont.sf3', 'soundfont.sf2']) urls.push(`${B}data/${n}`);
+        for (const n of ['gm.dls', 'soundfont.dls', 'soundfont.sf3', 'soundfont.sf2']) urls.push(`${B}local/${n}`);
         const { SoundBankLoader } = await import('spessasynth_core');
         for (const u of urls) {
           try {
@@ -253,7 +254,7 @@ export class SoundQueue {
     if (!this.uiBuffers.has(name)) {
       this.uiBuffers.set(name, (async () => {
         try {
-          const r = await fetch(`${import.meta.env.BASE_URL}snd/${name}.wav`);
+          const r = await fetch(assetUrl(`snd/${name}.wav`));
           if (!r.ok) { this._warn(`missing UI sound snd/${name}.wav`); return null; }
           return this._decode(new Uint8Array(await r.arrayBuffer()));
         } catch { return null; }

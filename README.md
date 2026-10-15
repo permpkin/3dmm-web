@@ -89,12 +89,12 @@ Windows' GM wavetable synth (`gm.dls`). This port renders the same events
 through a real SF2/SF3/DLS sound bank, so the music sounds the way it did
 in 1995 — including pitch bends, controllers and the full drum kit.
 
-Drop a bank file into `public/data/` (or `dist/data/` on a deployed build)
+Drop a bank file into `public/local/` (or `dist/local/` on a deployed build)
 and it is picked up automatically, checked in this order:
 
-1. `data/gm.dls` — the authentic choice; `C:\Windows\System32\drivers\gm.dls`
+1. `local/gm.dls` — the authentic choice; `C:\Windows\System32\drivers\gm.dls`
    from any Windows install is the exact bank 3DMM used.
-2. `data/soundfont.dls` / `data/soundfont.sf3` / `data/soundfont.sf2` — any
+2. `local/soundfont.dls` / `local/soundfont.sf3` / `local/soundfont.sf2` — any
    General MIDI bank (`.sf3` is Vorbis-compressed, so it's smaller).
 3. `?sf=<url>` — overrides the list with a bank hosted anywhere.
 
@@ -300,9 +300,13 @@ This project exists thanks to the people who made, released and preserved
 
 ## License & legal
 
-Code is ISC (see `package.json`). The 3DMM data files under `public/`
-(sounds, textures, cursors, thumbnails, `.3CN` libraries) and the
-`test/WHERE.3MM` fixture are **Microsoft copyrighted game assets from
-1995**, bundled here for preservation/interoperability purposes only — they
-are *not* covered by the code license. Distribute them at your own
-discretion; replace them with your own install's files when in doubt.
+Code is ISC (see `package.json`). The 3DMM binary content — `.3CN` libraries,
+`.3th` thumbnails and UI `.wav` sounds — is **not vendored**: the app streams
+it at runtime from the open-sourced
+[microsoft/Microsoft-3D-Movie-Maker](https://github.com/microsoft/Microsoft-3D-Movie-Maker)
+repo (`assetUrl()` in `src/app/resources.ts` maps `data/*` and `snd/*` to
+upstream paths). The textures, cursors and `test/WHERE.3MM` fixture remain
+**Microsoft copyrighted game assets from 1995**, kept here for
+preservation/interoperability purposes only — they are *not* covered by the
+code license. Distribute them at your own discretion; replace them with your
+own install's files when in doubt.

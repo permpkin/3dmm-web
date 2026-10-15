@@ -5,8 +5,8 @@ import { movieFile, contentLibrary } from './helpers.ts';
 
 // Integration: step the whole fixture movie headlessly against the real
 // .3CN content files. Guards the Kauai scene-state semantics in appState.moviePlayer.js.
-test('MoviePlayer steps through every scene to movie end', () => {
-  const p = new MoviePlayer(movieFile(), contentLibrary());
+test('MoviePlayer steps through every scene to movie end', async () => {
+  const p = new MoviePlayer(movieFile(), await contentLibrary());
   assert.equal(p.movie.scenes.length, 3);
 
   const seen = new Set();
@@ -19,10 +19,10 @@ test('MoviePlayer steps through every scene to movie end', () => {
 
   assert.deepEqual([...seen].sort(), [0, 1, 2]);
   assert.ok(steps > 100, `suspiciously few frames: ${steps}`);
-});
+}, 120000); // remote fetch — cold run downloads ~80MB
 
-test('MoviePlayer resolves actor templates and stage presence', () => {
-  const p = new MoviePlayer(movieFile(), contentLibrary());
+test('MoviePlayer resolves actor templates and stage presence', async () => {
+  const p = new MoviePlayer(movieFile(), await contentLibrary());
   p.loadScene(1); // the scene with actors
   // Patrick is added at frame 30, Sasha enters via an AET.Add at frame 154
   p.gotoFrame(31);
@@ -34,4 +34,4 @@ test('MoviePlayer resolves actor templates and stage presence', () => {
   for (const a of p.visibleActors) assert.ok(a.rootMatrix.length === 12);
   // no unresolved content for this movie
   assert.deepEqual(p.warnings.filter((w) => /missing template/.test(w)), []);
-});
+}, 120000); // remote fetch — cold run downloads ~80MB

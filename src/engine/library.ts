@@ -24,11 +24,11 @@ export class Library {
     this._rtmpl = new Map(); // runtime-built templates (e.g. 3D text) not present in any file
   }
 
-  /** Fetch and parse all CONTENT_FILES under `baseUrl`, reporting streamed
-   *  byte progress as `onProgress(name, loaded, total)`. */
-  static async load(baseUrl, onProgress?) {
+  /** Fetch and parse all CONTENT_FILES via `resolve(name) -> url`, reporting
+   *  streamed byte progress as `onProgress(name, loaded, total)`. */
+  static async load(resolve, onProgress?) {
     const files = await Promise.all(CONTENT_FILES.map(async (n) => {
-      const res = await fetch(`${baseUrl}/${n}`);
+      const res = await fetch(resolve(n));
       if (!res.ok) throw new Error(`failed to load ${n}`);
       let buf;
       const rd = res.body?.getReader?.();
@@ -47,7 +47,7 @@ export class Library {
       } else buf = new Uint8Array(await res.arrayBuffer());
       const magic = String.fromCharCode(...buf.subarray(0, 4));
       if (magic !== 'CHN2' && magic !== '2NHC')
-        throw new Error(`${n} missing or invalid — copy the 3DMM .3CN content files into public/data/`);
+        throw new Error(`${n} missing or invalid — content files stream from the upstream repo`);
       return new ChunkyFile(buf, n);
     }));
     return new Library(files);
