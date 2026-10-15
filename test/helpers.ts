@@ -4,10 +4,24 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ChunkyFile } from '../src/format/chunky.ts';
 import { Library, CONTENT_FILES } from '../src/engine/library.ts';
+import { assetUrl } from '../src/app/resources.ts';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const readFile = (rel) => new Uint8Array(fs.readFileSync(path.join(ROOT, rel)));
+
+/** Content binaries aren't vendored — they stream from the upstream repo
+ *  (same resolver the app uses). Fetched bytes are cached under .test-cache/
+ *  so only the first run pays the ~80MB download. */
+const CACHE = path.join(ROOT, '.test-cache');
+export const remoteFile = async (rel) => {
+  const fp = path.join(CACHE, rel.replace(/\//g, '_'));
+  try { return new Uint8Array(fs.readFileSync(fp)); } catch { /* miss -> fetch */ }
+  const buf = new Uint8Array(await (await fetch(assetUrl(rel))).arrayBuffer());
+  fs.mkdirSync(CACHE, { recursive: true });
+  fs.writeFileSync(fp, buf);
+  return buf;
+};
 
 export const movieFile = (name = 'WHERE.3MM') =>
   new ChunkyFile(readFile(`test/${name}`), name);
@@ -59,5 +73,5 @@ export function swapContainer(bytes) {
 export const movieFileBE = (name = 'WHERE.3MM') =>
   new ChunkyFile(swapContainer(readFile(`test/${name}`)), `${name} (2NHC)`);
 
-export const contentLibrary = () =>
-  new Library(CONTENT_FILES.map((n) => new ChunkyFile(readFile(`public/data/${n}`), n)));
+export const contentLibrary = async () =>
+  new Library(await Promise.all(CONTENT_FILES.map(async (n) => new ChunkyFile(await remoteFile(`data/${n}`), n))));

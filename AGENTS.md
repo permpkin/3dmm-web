@@ -23,6 +23,9 @@ src/receiver.ts        Chromecast CAF receiver entry (receiver.html)
 src/app/
   appState.ts          `appState` singleton facade over zustand stores (useAppState/useUiState/useEditState)
   resources.ts         baseUrl/packTextures/textureUrl/cursorUrl/elementById/sleep + toastHost
+                       + assetUrl() — `data/*` and `snd/*` resolve to the upstream
+                       microsoft/Microsoft-3D-Movie-Maker repo (raw.githubusercontent,
+                       pinned commit); all other paths stay local under baseUrl
   editHistory.ts  bootstrap.ts  expansionPacks.ts  thumbnails.ts  movieDocument.ts
   playbackLoop.ts  renderOptions.ts  soundSources.ts  stream.ts  localization.ts
   edit/                movieEdits.ts / soundEdits.ts / textboxEdits.ts (singleton classes)

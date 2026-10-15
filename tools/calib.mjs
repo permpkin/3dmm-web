@@ -1,7 +1,7 @@
-import fs from 'node:fs';
 import { ChunkyFile } from '../src/format/chunky.js';
 import { parseBkgd, parseCamera } from '../src/format/content.js';
-const cf = new ChunkyFile(fs.readFileSync('public/data/BKGDS.3CN'), 'BKGDS');
+const UPSTREAM = 'https://raw.githubusercontent.com/microsoft/Microsoft-3D-Movie-Maker/104b2653e68046c2f6373186169f281006db35b1/cd3/3DMOVIE/';
+const cf = new ChunkyFile(new Uint8Array(await (await fetch(UPSTREAM + 'BKGDS.3CN')).arrayBuffer()), 'BKGDS');
 // invert BRender 4x3 affine (row-vector)
 function inv(m) {
   const [a,b,c,d,e,f,g,h,i,tx,ty,tz] = m;

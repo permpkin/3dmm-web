@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { decodeWavAdpcm } from '../src/format/wav.ts';
 import { parseMids } from '../src/format/mids.ts';
 import { ChunkyFile } from '../src/format/chunky.ts';
-import { movieFile, readFile } from './helpers.ts';
+import { movieFile, remoteFile } from './helpers.ts';
 
 test('decodeWavAdpcm returns null for non-ADPCM input', () => {
   assert.equal(decodeWavAdpcm(new Uint8Array(0)), null);
@@ -41,10 +41,10 @@ test('parseMids handles varint deltas, running status and meta events', () => {
   assert.deepEqual(evs[2], { ts: 5, msg: [0xc0, 0x03] });
 });
 
-test('parseMids parses real MIDS chunks from SNDS.3CN', () => {
-  const chunkyFile = new ChunkyFile(readFile('public/data/SNDS.3CN'), 'SNDS.3CN');
+test('parseMids parses real MIDS chunks from SNDS.3CN', async () => {
+  const chunkyFile = new ChunkyFile(await remoteFile('data/SNDS.3CN'), 'SNDS.3CN');
   const mids = chunkyFile.ofType('MIDS').next().value;
   const evs = parseMids(chunkyFile.data('MIDS', mids.cno));
   assert.ok(evs.length > 0);
   for (let i = 1; i < evs.length; i++) assert.ok(evs[i].ts >= evs[i - 1].ts, 'timestamps must be non-decreasing');
-});
+}, 120000); // remote fetch — cold run downloads ~11MB

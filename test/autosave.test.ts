@@ -36,7 +36,7 @@ test('movieDocument.flushDocument writes a restorable record; get()+bytes reopen
   const state = await import('../src/app/appState.ts');
   const doc = await import('../src/app/movieDocument.ts');
   const { MoviePlayer } = await import('../src/engine/player.ts');
-  state.appState.setContentLibrary(contentLibrary());
+  state.appState.setContentLibrary(await contentLibrary());
   state.appState.setSoundQueue(new Proxy({}, { get: () => () => {} }));
   state.appState.setSceneRenderer(new Proxy({}, { get: () => () => {}, set: () => true }));
   state.appState.setMoviePlayer(new MoviePlayer(movieFile(), state.appState.contentLibrary));
@@ -52,7 +52,7 @@ test('movieDocument.flushDocument writes a restorable record; get()+bytes reopen
   const ok = doc.movieDocument.openMovie(rec.bytes, rec.name, false);
   expect(ok).toBe(true);
   expect(state.appState.moviePlayer.movie.scenes.length).toBe(3);
-});
+}, 120000); // remote fetch — cold run downloads ~80MB
 
 test('edited movie (scene/actor/tbox inserts) serializes, flushes, restores', async () => {
   const state = await import('../src/app/appState.ts');

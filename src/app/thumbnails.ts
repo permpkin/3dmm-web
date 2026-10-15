@@ -2,7 +2,7 @@ import { Reader } from '../format/binary.ts';
 import { ChunkyFile } from '../format/chunky.ts';
 import { parseMbmp } from '../format/content.ts';
 import { bootSequence } from './bootstrap.ts';
-import { baseUrl } from './resources.ts';
+import { assetUrl } from './resources.ts';
 import { appState } from './appState.ts';
 /** Thumbnail catalogs — parses .3th files into browser-picker grids
  *  (actors/props/scenes), background camera-angle thumbs, spletter easel
@@ -63,7 +63,7 @@ export class Thumbnails {
 /** Fetch and scan the builtin .3th files under data/ — called during boot. */
 loadBuiltinThumbnails = async () => {
 for (const file of ['actor.3th', 'prop.3th', 'bkgds.3th', 'actresl.3th', 'mtrl.3th']) {
-  try { this.scanThumbnailFile(new ChunkyFile(await (await fetch(`${baseUrl}data/${file}`)).arrayBuffer())); }
+  try { this.scanThumbnailFile(new ChunkyFile(await (await fetch(assetUrl(`data/${file}`))).arrayBuffer())); }
   catch (e) { console.warn(`${file}:`, e.message); }
   bootSequence.advanceMiscTick(`loading ${file}`);
 }
