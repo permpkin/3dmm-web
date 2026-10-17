@@ -27,25 +27,29 @@ import { localizer } from './app/localization.ts';
 // --- boot: splash, texture warm, content library -------------------------------
 injectAppStyles();
 const warmupProgress = bootView.segment(0.18);
-bootSequence.manifestPromise.then(async (manifest) => {
-  const files = [...(manifest?.textures ?? []).map((f) => `textures/${f}`), ...(manifest?.cur ?? []).map((f) => `cur/${f}`)];
-  if (!files.length) return warmupProgress(1);
-  let i = 0, done = 0;
-  await Promise.all(Array.from({ length: 24 }, async () => {
-    while (i < files.length) {
-      const f = files[i++];
-      try {
-        // PNGs are decoded into the textureImage cache (not just fetched) so first
-        // paint never flickers on a half-decoded Image; cursors stay fetch-only.
-        if (f.endsWith('.png') && f.startsWith('textures/')) await textureCache.warm(f.slice(9, -4));
-        else await (await fetch(`${baseUrl}${f}`)).blob();
-      } catch { /* lazy loads retry */ }
-      warmupProgress(++done / files.length, localizer.translate('boot.loading'));
-    }
-  }));
-}).catch(() => {});
 bootSequence.progressBar.hidden = false;
 const splashT0 = performance.now();
+// Boot stages run strictly in order — each owns the progress caption until it
+// finishes, so file names never flicker between concurrent loads.
+const manifest = await bootSequence.manifestPromise;
+{ // texture warm — prewarmed before the content library starts
+  const files = [...(manifest?.textures ?? []).map((f) => `textures/${f}`), ...(manifest?.cur ?? []).map((f) => `cur/${f}`)];
+  if (files.length) {
+    let i = 0, done = 0;
+    await Promise.all(Array.from({ length: 24 }, async () => {
+      while (i < files.length) {
+        const f = files[i++];
+        try {
+          // PNGs are decoded into the textureImage cache (not just fetched) so first
+          // paint never flickers on a half-decoded Image; cursors stay fetch-only.
+          if (f.endsWith('.png') && f.startsWith('textures/')) await textureCache.warm(f.slice(9, -4));
+          else await (await fetch(`${baseUrl}${f}`)).blob();
+        } catch { /* lazy loads retry */ }
+        warmupProgress(++done / files.length, localizer.translate('boot.loading'));
+      }
+    }));
+  } else warmupProgress(1);
+}
 
 const libraryProgress = bootView.segment(0.74);
 const libraryParts = new Map(); // per-.3CN byte fraction

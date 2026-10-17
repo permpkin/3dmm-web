@@ -27,7 +27,8 @@ export class Library {
   /** Fetch and parse all CONTENT_FILES via `resolve(name) -> url`, reporting
    *  streamed byte progress as `onProgress(name, loaded, total)`. */
   static async load(resolve, onProgress?) {
-    const files = await Promise.all(CONTENT_FILES.map(async (n) => {
+    const files = [];
+    for (const n of CONTENT_FILES) { // sequential — one fetch (and one progress caption) at a time
       const res = await fetch(resolve(n));
       if (!res.ok) throw new Error(`failed to load ${n}`);
       let buf;
@@ -48,8 +49,8 @@ export class Library {
       const magic = String.fromCharCode(...buf.subarray(0, 4));
       if (magic !== 'CHN2' && magic !== '2NHC')
         throw new Error(`${n} missing or invalid — content files stream from the upstream repo`);
-      return new ChunkyFile(buf, n);
-    }));
+      files.push(new ChunkyFile(buf, n));
+    }
     return new Library(files);
   }
 
