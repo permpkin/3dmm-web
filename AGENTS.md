@@ -15,6 +15,22 @@ logical pixels, never percentages.
   `allowImportingTsExtensions`; `strict:false`/`noImplicitAny:false` is the
   deliberate migration posture — don't weaken further).
 
+## Env vars
+
+All optional — a repo with none of these builds and runs fine (telemetry
+fully disabled):
+
+- `VITE_SENTRY_DSN` — runtime error reporting (build-time, public; baked into the bundle)
+- `VITE_GA_MEASUREMENT_ID` — GA4 `G-…` measurement id (build-time; injects gtag.js)
+- `SENTRY_AUTH_TOKEN` — secret; enables the vite plugin's sourcemap upload on build
+- `SENTRY_ORG` / `SENTRY_PROJECT` — upload target, read by the plugin
+
+`app/telemetry.ts` is the single fan-out point — `track(action, data)`
+emits a Sentry breadcrumb + GA4 event (use snake_case names), `error()`
+captures exceptions, `span()` wraps traced work, and `_wireStores` diffs
+the zustand stores into events automatically. CI reads env from repo
+secrets/variables; Cloudflare builds from env vars.
+
 ## Layout
 
 ```

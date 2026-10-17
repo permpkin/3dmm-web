@@ -3,6 +3,7 @@
 import { createReadStream, statSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 
 const EXP_DIR = resolve('expansions'); // dev: ?packs=/expansions/<dir> tests local packs
 const MIME = { '.json': 'application/json', '.png': 'image/png', '.cur': 'application/octet-stream' };
@@ -11,6 +12,7 @@ export default {
   base: './',
   build: {
     target: 'es2022',
+    sourcemap: 'hidden', // maps for Sentry upload — no sourceMappingURL ships
     assetsInlineLimit: 0, // never inline runtime blobs — data/ textures live in public/
     rollupOptions: {
       input: { main: resolve('index.html') },
@@ -27,6 +29,12 @@ export default {
   esbuild: { target: 'es2022' },
   optimizeDeps: { esbuildOptions: { target: 'es2022' } },
   plugins: [
+  // source-map upload — org/project/token all come from SENTRY_* env vars;
+  // skipped entirely when SENTRY_AUTH_TOKEN isn't set (plain OSS builds)
+  ...(process.env.SENTRY_AUTH_TOKEN ? [sentryVitePlugin({
+    sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] }, // public app — don't ship maps
+    errorHandler(err) { if (process.env.CI) throw err; console.warn(`[sentry] ${err.message}`); }, // loud in CI, soft locally
+  })] : []),
   // ANALYZE=1 npx vite build -> dist/stats.html treemap (rollup-plugin-visualizer)
   ...(process.env.ANALYZE ? [visualizer({ filename: 'dist/stats.html', template: 'treemap', gzipSize: true })] : []),
   {

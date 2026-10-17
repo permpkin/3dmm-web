@@ -262,6 +262,32 @@ pushes to `main`, but only when site-affecting files change (`src/`,
 
 Tests run on every PR and push via `.github/workflows/ci.yml`.
 
+## Monitoring
+
+[Sentry](https://sentry.io) error reporting and
+[Google Analytics 4](https://analytics.google.com) usage stats are built in
+but **completely optional** — a checkout with no env vars builds, runs, and
+tests identically with all telemetry compiled to no-ops.
+
+| Variable | Used by | Purpose |
+| --- | --- | --- |
+| `VITE_SENTRY_DSN` | `src/app/sentry.ts` | Runtime error reporting (baked into the bundle — client DSNs are public by design). Sentry → Settings → Projects → *project* → Client Keys. |
+| `VITE_GA_MEASUREMENT_ID` | `src/app/telemetry.ts` | GA4 `G-XXXXXXXXXX` — injects `gtag.js` and forwards `track()` calls as GA events. GA → Admin → Data Streams. |
+| `SENTRY_AUTH_TOKEN` | `vite.config.ts` | Enables sourcemap upload on build (skipped silently without it). Sentry → Settings → Auth Tokens. **Keep secret.** |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | `vite.config.ts` | Upload target for the token above. |
+
+Local dev: copy `.env.example` → `.env` (gitignored) — the build-time
+`SENTRY_*` vars go in `.env.sentry-build-plugin` instead (also gitignored;
+the vite plugin reads it natively). CI/deploy builds read them from the
+host's env (`GITHUB_`* secrets/vars, Cloudflare env, …).
+
+What's wired once enabled: uncaught errors + `console.error` → Sentry
+issues; session replay (10% sessions / 100% with errors); pageload/navigation
+tracing; all internal state transitions (playback, tool arming, selections,
+view stack) → Sentry breadcrumbs **and** GA events via
+`telemetry.track()` in `src/app/telemetry.ts`; production sourcemaps →
+readable stack traces (emitted hidden, uploaded, then stripped from `dist/`).
+
 ## Project layout
 
 ```

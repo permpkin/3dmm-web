@@ -13,6 +13,7 @@ import { serializeMovie } from '../format/movie.ts';
 import { playbackLoop } from './playbackLoop.ts';
 import { toastHost, baseUrl } from './resources.ts';
 import { editHistory } from './editHistory.ts';
+import { telemetry } from './telemetry.ts';
 import { localizer } from './localization.ts';
 
 /** Uint8Array -> base64 (chunked to dodge the arg-count limit). */
@@ -100,8 +101,10 @@ class MovieDocument {
     try { p = new MoviePlayer(new ChunkyFile(buffer, name), appState.contentLibrary); }
     catch (e) { // a failed load leaves the old movie open
       toastHost.show(e.message);
+      telemetry.error(e, { op: 'openMovie', name });
       return false;
     }
+    telemetry.track('movie_open', { name, scenes: p.movie.scenes.length });
     appState.setMoviePlayer(p);
     this.saveFileHandle = null;
     window.moviePlayer = appState.moviePlayer; window.soundQueue = appState.soundQueue; window.sceneRenderer = appState.sceneRenderer;
@@ -124,7 +127,7 @@ class MovieDocument {
     appState.moviePlayer.onTransStart = () => appState.sceneRenderer.snapshot(appState.moviePlayer);
     // every scene/frame change updates DOC_POSITION_KEY — a refresh lands where the user was
     const _loadScene = p.loadScene.bind(p), _gotoFrame = p.gotoFrame.bind(p);
-    p.loadScene = (i) => { _loadScene(i); this.savePlaybackPosition(); appState.editorTools.syncToolState?.(); };
+    p.loadScene = (i) => { _loadScene(i); telemetry.track('scene_load', { scene: i }); this.savePlaybackPosition(); appState.editorTools.syncToolState?.(); };
     p.gotoFrame = (n) => { _gotoFrame(n); this.savePlaybackPosition(); };
     appState.moviePlayer.loadScene(0);
     editHistory.clear(); appState.setSelectedChildId(-1); appState.setPendingPlacement(null);
@@ -232,7 +235,8 @@ class MovieDocument {
         this.saveFileHandle = null;
       }
       toastHost.show(localizer.translate('doc.saved', { name: this.saveFileHandle?.name || name }));
-    } catch (e) { if (e.name !== 'AbortError') toastHost.show(localizer.translate('doc.saveFailed', { err: e.message })); }
+      telemetry.track('movie_save', { name, saveAs });
+    } catch (e) { if (e.name !== 'AbortError') { toastHost.show(localizer.translate('doc.saveFailed', { err: e.message })); telemetry.error(e, { op: 'saveMovie' }); } }
   });
 
   /** Open a movie by URL — bare names resolve under movies/ (the ?3mm=

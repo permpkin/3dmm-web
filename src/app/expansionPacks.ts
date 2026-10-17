@@ -5,6 +5,7 @@ import { packTextures } from './resources.ts';
 import { appState } from './appState.ts';
 import { thumbnails } from './thumbnails.ts';
 import { localizer } from './localization.ts';
+import { telemetry } from './telemetry.ts';
 
 /** IndexedDB cache for downloaded .vxp archives — keyed by resolved URL so
  *  repeat visits skip the network entirely. Resolves null when IDB is
@@ -145,6 +146,10 @@ class ExpansionPacks {
         this._applyItems(items);
       } catch (e) { console.warn(`vxp ${vxp.url}:`, e.message); this.packNotes.push(localizer.translate('pack.failed', { name: vxp.name })); }
       tick?.(++done / total, cap());
+    }
+    if (total) {
+      telemetry.track('packs_load', { packs: packs.length, vxps: vxps.length, failed: this.packNotes.length });
+      for (const note of this.packNotes) telemetry.error(new Error(note), { op: 'packs_load' });
     }
   };
 

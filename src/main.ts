@@ -1,3 +1,5 @@
+import './app/sentry.ts'; // first — Sentry init must precede everything else
+import { telemetry } from './app/telemetry.ts';
 import { movieDocument } from './app/movieDocument.ts';
 import { playbackLoop } from './app/playbackLoop.ts';
 import { bootSequence } from './app/bootstrap.ts';
@@ -25,6 +27,7 @@ import { localizer } from './app/localization.ts';
 
 
 // --- boot: splash, texture warm, content library -------------------------------
+telemetry.init();
 injectAppStyles();
 const warmupProgress = bootView.segment(0.18);
 bootSequence.progressBar.hidden = false;
@@ -90,6 +93,8 @@ const remoteMovie = queryParams.get('3mm');
 if (remoteMovie) {
   bootError = await movieDocument.openMovieUrl(remoteMovie); // a loaded remote movie becomes the working doc
   bootComplete = !bootError;
+  telemetry.track('movie_open_url', { ok: bootComplete });
+  if (bootError) telemetry.error(new Error(bootError), { op: 'openMovieUrl' });
 }
 if (!bootComplete) {
   const doc = await movieDocument.documentDatabase.get(), pos = movieDocument.savedPlaybackPosition(); // pos first — movieDocument.openMovie()'s loadScene(0) overwrites it
@@ -107,9 +112,11 @@ if (!bootComplete) {
 }
 await sleep(Math.max(0, 500 - (performance.now() - splashT0))); // keep the splash up briefly so it doesn't flash
 if (!bootComplete) movieDocument.newMovie(); // straight to the editor — no menu
+telemetry.track('app_boot', { restored: bootComplete, scenes: appState.moviePlayer?.movie.scenes.length ?? 0 });
 bootView.done();
 [bootError, ...expansionPacks.packNotes].filter(Boolean).forEach((n, i) => setTimeout(() => toastHost.show(n), 400 + i * 3400)); // toasts after the splash fades
 const bootMode = queryParams.get('mode');
+telemetry.track('mode_enter', { mode: bootMode || 'studio' });
 if (bootMode === 'theatre' || bootMode === 'embed') { // cinema/embed views instead of the editor (works for the autosaved doc too, so the studio's theatre link can open it)
   (bootMode === 'theatre' ? TheatreView.enter : EmbedView.enter)();
   if (appState.moviePlayer.movie.scenes.length) setTimeout(() => playbackLoop.setPlaying(true), 500); // showtime

@@ -10,6 +10,7 @@ import { hitTestTextbox, caretRect } from '../../render/textbox.ts';
 import { movieDocument } from '../movieDocument.ts';
 import { movieEdits } from '../edit/movieEdits.ts';
 import { soundEdits } from '../edit/soundEdits.ts';
+import { telemetry } from '../telemetry.ts';
 import { playbackLoop } from '../playbackLoop.ts';
 import { version } from '../../../package.json';
 import { thumbnails } from '../thumbnails.ts';
@@ -620,10 +621,12 @@ export class StudioView extends View {
   V.add(view); // stage blit stays under the roll calls so their thumbs draw over it
   for (const [id, x, y, w, h] of STUDIO_TEXT_LAYOUT) { const text = new StudioText(id, x, y, w, h); V.add(text); namedElements[id] = text; }
   { // the exit strip slot — a web page can't quit, so it shows the app
-    // version instead
+    // version instead; a "report a problem" link sits just left of it when
+    // Sentry is configured (no DSN -> nothing to report to -> no link)
     const ver = new StudioText('stver', 584, 466, 51, 14, { size: 9, color: '#555' });
     ver.textContent = localizer.translate('ui.version', { version });
     V.add(ver);
+    if (telemetry.feedbackEnabled) V.add(new TextLink(localizer.translate('ui.reportProblem'), 484, 466, 96, 14, () => telemetry.report(), { size: 9, align: 'right' }));
   }
   { // the movie-name field doubles as the rename control — clicking swaps in a
     // canvas TextField over the slot

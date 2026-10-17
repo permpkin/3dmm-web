@@ -22,6 +22,7 @@
     "settings": "settings",
     "renderSettings": "render settings",
     "version": "v{version}",
+    "reportProblem": "Report a problem",
     "pageNum": "{page} / {total}",
     "bioPage": "{n} / {total}",
     "frameDash": "–",

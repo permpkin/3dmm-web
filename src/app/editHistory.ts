@@ -4,6 +4,7 @@
 import { studioHost } from './ui/studio.ts';
 import { textboxEdits } from './edit/textboxEdits.ts';
 import { movieDocument } from './movieDocument.ts';
+import { telemetry } from './telemetry.ts';
 
 /** Undo/redo stacks + the toolbar button sync. `executeOperation` runs and
  *  records an op; `undo`/`redo` pop across the stacks and mark the document
@@ -16,6 +17,7 @@ export class EditHistory {
   /** Run op.do() now and push it as the next undoable step (clears the redo stack). */
   executeOperation = (op) => {
     textboxEdits.endTextboxSnapshot(); op.do();
+    telemetry.track('edit_op');
     this.undos.push(op); this.redos.length = 0; this.mode = 'u';
     movieDocument.markDocumentDirty(); this.syncUndoButton();
   };
@@ -23,14 +25,14 @@ export class EditHistory {
   /** Pop the newest op, run its undo, move it to the redo stack. */
   undo = () => {
     textboxEdits.endTextboxSnapshot(); const op = this.undos.pop();
-    if (op) { op.undo(); this.redos.push(op); movieDocument.markDocumentDirty(); }
+    if (op) { op.undo(); telemetry.track('edit_undo'); this.redos.push(op); movieDocument.markDocumentDirty(); }
     this.mode = 'r'; this.syncUndoButton();
   };
 
   /** Pop the newest redone op, run its do, move it back to the undo stack. */
   redo = () => {
     textboxEdits.endTextboxSnapshot(); const op = this.redos.pop();
-    if (op) { op.do(); this.undos.push(op); movieDocument.markDocumentDirty(); }
+    if (op) { op.do(); telemetry.track('edit_redo'); this.undos.push(op); movieDocument.markDocumentDirty(); }
     this.mode = 'u'; this.syncUndoButton();
   };
 

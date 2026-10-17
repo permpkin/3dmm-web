@@ -9,3 +9,5 @@ node_modules/
 dist/
 expansions/
 .test-cache/
+.env
+.env.sentry-build-plugin
