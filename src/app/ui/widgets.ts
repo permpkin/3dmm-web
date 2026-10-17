@@ -1,10 +1,11 @@
 // Shared canvas UI widgets — texture-backed button, slider, image, text link,
-// and the GL movie screen blit.
+// text field, and the GL movie screen blit.
 import { Element } from './element.ts';
 import { CURSORS } from './cursorManager.ts';
 import { textureCache } from './textureCache.ts';
 import { elementById } from '../resources.ts';
 import { localizer } from '../localization.ts';
+import { uiRoot, UI_WIDTH, UI_HEIGHT } from './root.ts';
 
 /** Draws a texture by name, fit/contain/cover into its rect. */
 export class ImageElement extends Element {
@@ -206,3 +207,262 @@ export class MovieScreen extends Element {
   /** Per-frame — repaint so the blit always shows the freshest GL frame. */
   frame() { this.dirty(); }
 }
+
+// --- TextField: canvas single-line text input --------------------------------
+// Replaces the old DOM <input> overlays (movie name, 3D-text words, recorder
+// and costume name fields). Click focuses and places the caret, drag selects.
+// A shared offscreen <input> fronts the fields (the CanvasInput approach):
+// focusing it summons the mobile virtual keyboard and gives real text input —
+// every alphanumeric key, paste, autocorrect, IME — for free; the field just
+// renders the input's value + selection. A synthetic keydown fallback covers
+// the case where the hidden input can't take DOM focus.
+let activeTextField: TextField | null = null;
+
+/** The canvas text field currently owning keyboard input, or null. */
+export const focusedTextField = () => activeTextField;
+
+// The hidden input — invisible over the active field (positioned so iOS
+// scrolls/zooms near it). font-size >= 16px prevents iOS auto-zoom.
+const hiddenInput = document.createElement('input');
+hiddenInput.type = 'text';
+hiddenInput.autocomplete = 'off';
+hiddenInput.setAttribute('autocapitalize', 'none');
+hiddenInput.spellcheck = false;
+hiddenInput.setAttribute('aria-hidden', 'true');
+hiddenInput.style.cssText = 'position:fixed;width:2px;height:2px;padding:0;border:0;opacity:0;pointer-events:none;font-size:16px;z-index:-1;';
+document.body.appendChild(hiddenInput);
+
+/** Push the field's value + selection into the hidden input. */
+const mirrorToInput = (f) => {
+  if (f.maxLength > 0) hiddenInput.maxLength = f.maxLength; else hiddenInput.removeAttribute('maxlength');
+  hiddenInput.value = f.value;
+  const a = Math.min(f.anchor, f.caret), b = Math.max(f.anchor, f.caret);
+  hiddenInput.setSelectionRange(a, b, f.anchor <= f.caret ? 'forward' : 'backward');
+};
+/** Pull the hidden input's selection into the field's anchor/caret. */
+const mirrorSelFromInput = (f) => {
+  f.anchor = hiddenInput.selectionStart ?? 0;
+  f.caret = hiddenInput.selectionEnd ?? 0;
+  if (hiddenInput.selectionDirection === 'backward') [f.anchor, f.caret] = [f.caret, f.anchor];
+};
+/** True while the field's view is the top of the stack. */
+const fieldOnTop = (f) => uiRoot.topView === f._top();
+/** Give up the hidden input + focus state when the field's view is gone. */
+const dropIfGone = (f) => { if (f && !fieldOnTop(f)) { activeTextField = null; hiddenInput.blur(); return true; } return false; };
+
+hiddenInput.addEventListener('input', () => {
+  const f = activeTextField;
+  if (!f || dropIfGone(f)) return;
+  f.value = f.maxLength > 0 ? hiddenInput.value.slice(0, f.maxLength) : hiddenInput.value;
+  mirrorSelFromInput(f);
+  f._scrollToCaret(); f._t0 = performance.now(); // blink restarts on edits
+  f.onInput?.(f.value);
+  f.dirty();
+});
+document.addEventListener('selectionchange', () => {
+  const f = activeTextField;
+  if (f && document.activeElement === hiddenInput && !dropIfGone(f)) { mirrorSelFromInput(f); f._scrollToCaret(); f.dirty(); }
+});
+hiddenInput.addEventListener('keydown', (e) => {
+  const f = activeTextField;
+  if (!f || dropIfGone(f)) { e.preventDefault(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); f.onCommit?.(f.value); }
+  else if (e.key === 'Escape' && f.onCancel) { e.preventDefault(); e.stopPropagation(); f.onCancel(); }
+  else if (e.key === 'Escape') f.blur(false); // no cancel hook — falls through to the modal Esc route like the DOM inputs
+});
+hiddenInput.addEventListener('blur', () => activeTextField?.blur()); // e.g. mobile keyboard dismissed
+
+export class TextField extends Element {
+  value = '';
+  anchor = 0;      // selection anchor (char index)
+  caret = 0;       // caret index — the selection's 'other' end
+  placeholder = '';
+  maxLength = 0;   // 0 = unlimited
+  onInput = null;      // (value) — fires on every mutation (live previews)
+  onCommit = null;     // (value) — Enter commits
+  onCancel = null;     // () — when set, Escape is consumed and fires this; unset
+                       // Escape just blurs and falls through to the modal Esc route
+  commitOnBlur = false;// outside-click commits (movie-name style) vs just blurs
+  font = "bold 19px 'Comic Sans MS', cursive, sans-serif";
+  fg = '#222';
+  bg = '#fff8dc';
+  bevel = true;    // inset border, like the old 2px-inset DOM fields
+  padX = 5;
+  _scroll = 0;     // horizontal scroll offset when the text overflows
+  _t0 = 0;         // caret-blink phase origin
+
+  constructor(x, y, w, h) { super(x, y, w, h); this.cursor = CURSORS.ibeam; }
+
+  /** True while this field owns keyboard input. */
+  get focused() { return activeTextField === this; }
+
+  /** Take keyboard focus — selectAll highlights the whole value (rename-field
+   *  style). Idempotent: re-focusing keeps the current selection. */
+  focus(selectAll = false) {
+    const was = activeTextField === this;
+    if (!was) { activeTextField?.blur(); activeTextField = this; }
+    this._t0 = performance.now();
+    if (selectAll) { this.anchor = 0; this.caret = this.value.length; }
+    else if (!was) this.anchor = this.caret = this.value.length; // fresh focus lands the caret at the end; re-clicks place it via indexAt
+    // mirror into the hidden input and focus it — summons the virtual keyboard
+    mirrorToInput(this);
+    const r = uiRoot.canvas.getBoundingClientRect(), [ax, ay] = this.abs();
+    hiddenInput.style.left = `${r.left + ax * r.width / UI_WIDTH}px`;
+    hiddenInput.style.top = `${r.top + ay * r.height / UI_HEIGHT}px`;
+    hiddenInput.focus({ preventScroll: true });
+    this._scrollToCaret();
+    this.dirty();
+  }
+
+  /** Drop keyboard focus — commits unless told otherwise (or commitOnBlur is
+   *  off). */
+  blur(commit = this.commitOnBlur) {
+    if (!this.focused) return;
+    activeTextField = null;
+    if (document.activeElement === hiddenInput) hiddenInput.blur();
+    if (commit) this.onCommit?.(this.value);
+    this.dirty();
+  }
+
+  /** The view this field sits in — the first ancestor whose parent is the root. */
+  _top() { let e = this; while (e.parent && e.parent !== uiRoot) e = e.parent; return e; }
+
+  /** Width of `this.value.slice(0, i)` in the field font. */
+  _xAt(i) { const ctx = uiRoot.ctx; ctx.font = this.font; return ctx.measureText(this.value.slice(0, i)).width; }
+
+  /** Field-local x -> nearest char index. */
+  _indexAt(lx) {
+    const ctx = uiRoot.ctx;
+    ctx.font = this.font;
+    const x = lx - this.padX + this._scroll;
+    let w = 0;
+    for (let i = 0; i < this.value.length; i++) {
+      const cw = ctx.measureText(this.value[i]).width;
+      if (x < w + cw / 2) return i;
+      w += cw;
+    }
+    return this.value.length;
+  }
+
+  /** Keep the caret inside the padded text area. */
+  _scrollToCaret() {
+    const inner = this.w - 2 * this.padX, x = this._xAt(this.caret);
+    if (x - this._scroll > inner) this._scroll = x - inner;
+    else if (x < this._scroll) this._scroll = x;
+  }
+
+  /** Mirror anchor/caret into the hidden input's selection — keeps real-input
+   *  typing in sync after canvas-side caret moves (clicks, drags). */
+  _mirrorSel() {
+    if (document.activeElement !== hiddenInput) return;
+    const a = Math.min(this.anchor, this.caret), b = Math.max(this.anchor, this.caret);
+    hiddenInput.setSelectionRange(a, b, this.anchor <= this.caret ? 'forward' : 'backward');
+  }
+
+  /** Replace the selected range with `str` ('' deletes), honoring maxLength. */
+  _replace(str) {
+    const a = Math.min(this.anchor, this.caret), b = Math.max(this.anchor, this.caret);
+    if (this.maxLength > 0) str = str.slice(0, Math.max(0, this.maxLength - this.value.length + b - a));
+    this.value = this.value.slice(0, a) + str + this.value.slice(b);
+    this.anchor = this.caret = a + str.length;
+    this._scrollToCaret(); this._t0 = performance.now(); // blink restarts on edits
+    this.onInput?.(this.value);
+    this.dirty();
+  }
+
+  /** Focus + caret placement; the drag selection is tracked in onPointerMove. */
+  onPointerDown(p) { this.focus(); this._dragging = true; this.anchor = this.caret = this._indexAt(p.x - this.abs()[0]); this._mirrorSel(); this.dirty(); return true; }
+  /** Extend the selection while dragging — plain hover must not move the caret
+   *  (uiRoot sends hovered elements every uncaptured pointermove). */
+  onPointerMove(p) { if (this._dragging) { this.caret = this._indexAt(p.x - this.abs()[0]); this._scrollToCaret(); this._mirrorSel(); this.dirty(); } }
+  /** End the selection drag — fires on the captured element wherever the
+   *  pointer is released, so _dragging can't get stuck. */
+  onPointerUp() { this._dragging = false; }
+
+  /** Caret-blink repaint tick (~450ms phase, matching the textbox caret). */
+  frame(now) {
+    if (!this.focused) return;
+    const ph = Math.floor((now - this._t0) / 450);
+    if (ph !== this._phase) { this._phase = ph; this.dirty(); }
+  }
+
+  /** Paint the field: bg + optional inset bevel, text (placeholder when
+   *  empty), inverted selection, blinking caret. */
+  draw(ctx) {
+    const { w, h } = this;
+    ctx.fillStyle = this.bg; ctx.fillRect(0, 0, w, h);
+    if (this.bevel) { // sunken bevel — same edge pair as the boot progress bar
+      ctx.strokeStyle = '#555'; ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+      ctx.strokeStyle = '#d8d8d8'; ctx.beginPath(); ctx.moveTo(w - 0.5, 0.5); ctx.lineTo(w - 0.5, h - 0.5); ctx.lineTo(0.5, h - 0.5); ctx.stroke();
+    }
+    ctx.save();
+    ctx.beginPath(); ctx.rect(this.padX, 0, w - 2 * this.padX, h); ctx.clip();
+    ctx.font = this.font; ctx.textBaseline = 'middle';
+    const cy = h / 2;
+    if (!this.value.length) {
+      if (this.placeholder) { ctx.fillStyle = '#999'; ctx.fillText(this.placeholder, this.padX, cy); }
+    } else {
+      const a = Math.min(this.anchor, this.caret), b = Math.max(this.anchor, this.caret);
+      const tx = this.padX - this._scroll;
+      ctx.fillStyle = this.fg;
+      ctx.fillText(this.value, tx, cy);
+      if (b > a) { // inverted hilite — dark field + light glyphs, like the textbox editor
+        const x0 = tx + this._xAt(a), x1 = tx + this._xAt(b);
+        ctx.save(); ctx.beginPath(); ctx.rect(x0, 0, x1 - x0, h); ctx.clip();
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#fff'; ctx.fillText(this.value, tx, cy);
+        ctx.restore();
+      }
+    }
+    if (this.focused && this.anchor === this.caret && Math.floor((performance.now() - this._t0) / 450) % 2 === 0) {
+      ctx.fillStyle = this.fg;
+      ctx.fillRect(Math.round(this.padX + this._xAt(this.caret) - this._scroll), 2, 1, h - 4);
+    }
+    ctx.restore();
+  }
+}
+
+// Synthetic fallback — edits the field directly when the hidden input doesn't
+// hold DOM focus (e.g. a programmatic focus() outside a user gesture). When it
+// does, the real input owns the keys and 'input'/'selectionchange' sync back.
+document.addEventListener('keydown', (e) => {
+  const f = activeTextField;
+  if (!f) return;
+  if (document.activeElement === hiddenInput) return; // the real input owns the keys
+  if (!fieldOnTop(f)) { f.blur(false); return; } // popped or covered — keys belong to whatever's on top
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const a = Math.min(f.anchor, f.caret), b = Math.max(f.anchor, f.caret), len = f.value.length;
+  const eat = () => { e.preventDefault(); e.stopPropagation(); };
+  const move = (cp) => { eat(); if (e.shiftKey) f.caret = cp; else f.anchor = f.caret = cp; f._scrollToCaret(); f._t0 = performance.now(); f.dirty(); };
+  const del = (x, y) => { eat(); f.anchor = x; f.caret = y; f._replace(''); };
+  if (e.key === 'Backspace') { if (b > a) del(a, b); else if (a > 0) del(a - 1, a); else eat(); }
+  else if (e.key === 'Delete') { if (b > a) del(a, b); else if (a < len) del(a, a + 1); else eat(); }
+  else if (e.key === 'ArrowLeft') move(b > a ? a : Math.max(0, a - 1));
+  else if (e.key === 'ArrowRight') move(b > a ? b : Math.min(len, a + 1));
+  else if (e.key === 'Home') move(0);
+  else if (e.key === 'End') move(len);
+  else if (e.key === 'Enter') { eat(); f.onCommit?.(f.value); }
+  else if (e.key === 'Escape') {
+    if (f.onCancel) { eat(); f.onCancel(); }
+    else f.blur(false); // no cancel hook — Escape falls through to the modal route like the DOM inputs
+  } else if (e.key.length === 1) { eat(); f._replace(e.key); }
+}, true);
+
+// A pointerdown outside the focused field blurs it (committing when the field
+// opts into commitOnBlur) — the DOM input's onblur equivalent.
+document.addEventListener('pointerdown', (e) => {
+  const f = activeTextField;
+  if (!f) return;
+  const r = uiRoot.canvas.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * UI_WIDTH, y = (e.clientY - r.top) / r.height * UI_HEIGHT;
+  const [ax, ay] = f.abs();
+  if (x < ax || x >= ax + f.w || y < ay || y >= ay + f.h) f.blur();
+}, true);
+
+// mousedown's default action would steal DOM focus from the hidden input
+// (the canvas isn't focusable, so focus falls back to body) — suppress it
+// while a field is editing; real outside-click blurs happen in the pointerdown
+// listener above.
+document.addEventListener('mousedown', (e) => {
+  if (activeTextField && e.target === uiRoot.canvas) e.preventDefault();
+}, true);

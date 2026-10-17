@@ -21,6 +21,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "fflate": "^0.8.3",
     "spessasynth_core": "^4.3.22",
     "three": "^0.169.0",
     "zustand": "^5.0.15"

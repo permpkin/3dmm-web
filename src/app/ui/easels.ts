@@ -11,6 +11,7 @@ import { movieEdits } from '../edit/movieEdits.ts';
 import { soundEdits } from '../edit/soundEdits.ts';
 import { textboxEdits } from '../edit/textboxEdits.ts';
 import { playbackLoop } from '../playbackLoop.ts';
+import { renderOptions } from '../renderOptions.ts';
 import { soundSources } from '../soundSources.ts';
 import { appState } from '../appState.ts';
 import { thumbnails } from '../thumbnails.ts';
@@ -19,7 +20,7 @@ import { AssetBrowserView } from './assetBrowser.ts';
 import { modalSlot } from './modal.ts';
 import { EaselView, CanvasEl, offscreenCanvas, ScrollButton, Thermometer, NamePlate, ListenerSlider, FramedCell } from './easel.ts';
 import { Element } from './element.ts';
-import { StudioButton, TextElement } from './widgets.ts';
+import { StudioButton, TextElement, TextField } from './widgets.ts';
 import { textureCache } from './textureCache.ts';
 import { studioHost } from './studio.ts';
 import { localizer } from '../localization.ts';
@@ -315,8 +316,9 @@ export class RecorderEasel extends EaselView {
     this.makeImage('e5par', 202, 154, 236, 172);
     this.therm = new Thermometer(224, 184, 193, 22); // recording-length fill
     this.add(this.therm);
-    this.nameInput = this.domInput(325, 229, 110, 21);
+    this.nameInput = this.add(new TextField(325, 229, 110, 21));
     this.nameInput.maxLength = 40; this.nameInput.placeholder = localizer.translate('easel.soundName');
+    this.nameInput.onCommit = () => this.done(true); // Enter = OK
     this.stream = null; this.rec = null; this.chunks = []; this.recording = null;
     this.t0 = 0; this.raf = 0; this.stopP = null;
     this.mikeBtn = this.makeButton('e5mike', 'e5mikes', 213, 269, 50, 48, async () => {
@@ -510,8 +512,9 @@ export class SpletterEasel extends EaselView {
     const pv = offscreenCanvas(492, 238); // preview canvas
     this.previewElement = new CanvasEl(pv, 74, 70, 492, 238);
     this.add(this.previewElement);
-    this.nameInput = this.domInput(71, 379, 498, 34);
+    this.nameInput = this.add(new TextField(71, 379, 498, 34));
     this.nameInput.maxLength = 50; this.nameInput.value = this.state.text; this.nameInput.placeholder = 'type 3D text';
+    this.nameInput.onCommit = () => this.commit(); // Enter = OK
     // preview: a live Actor over a freshly built template
     const previewRenderer = this.previewRenderer = new THREE.WebGLRenderer({ canvas: pv });
     this.onModalClose = () => previewRenderer.dispose();
@@ -530,9 +533,9 @@ export class SpletterEasel extends EaselView {
     this.makeButton('e1rot', 'e1rots', 320, 322, 50, 48, () => { this.state.iview = (this.state.iview + 1) % 5; this.rebuild(); }).clickSound = 'spin'; // cycle the view
     this.makeButton('e1can', 'e1canc', 443, 322, 50, 48, modalSlot.close);
     this.makeButton('e1okay', 'e1okayc', 493, 322, 50, 48, () => this.commit());
-    this.nameInput.oninput = () => { this.state.text = this.nameInput.value; this.rebuild(); }; // typing rebuilds the preview
+    this.nameInput.onInput = (v) => { this.state.text = v; this.rebuild(); }; // typing rebuilds the preview
     this.rebuild();
-    setTimeout(() => { this.nameInput.focus(); this.nameInput.select(); }, 0); // the field starts with all text selected
+    setTimeout(() => this.nameInput.focus(), 0); // caret at the end — no pre-selection
   }
 
   /** Render the preview actor into the easel's GL canvas. */
@@ -714,7 +717,7 @@ export class ActionBrowser extends EaselView {
     if (!appState.moviePlayer) return;
     const a = movieEdits.selectedActor() || [...appState.moviePlayer.actors.values()].find((x) => x.onStage);
     if (!a) return; // needs a selected actor
-    appState.setSelectedChildId(movieEdits.childIdOf(a)); studioHost.syncRollCall();
+    appState.setSelectedChildId(movieEdits.childIdOf(a)); textboxEdits.setSelectedTextbox(-1); textboxEdits.setFocusedTextbox(-1); studioHost.syncRollCall();
     const template = a.template;
     const actions = template.chunkyFile.kidsOf('TMPL', template.cno, 'ACTN').map((k) => ({ anid: k.chid, name: template.chunkyFile.get('ACTN', k.cno).name || `action ${k.chid}` }));
     if (!actions.length) return;
@@ -726,9 +729,9 @@ export class ActionBrowser extends EaselView {
     super();
     this.openSound = 'pbrowse'; // the action browser opens like an asset picker
     this.a = a; this.actions = actions;
-    const X = 62, Y = 100; // panel origin — child positions are relative to it
+    const X = 62, Y = 54; // panel origin — child positions are relative to it
     this.makeImage('book5', X, Y, 516, 372);
-    this.pageIndexText = new TextElement('', X + 123, Y + 339, 64, 29, { size: 15 });
+    this.pageIndexText = new TextElement('', X + 123, Y + 332, 64, 29, { size: 15 });
     this.add(this.pageIndexText);
     // preview pane (312,12)-(496,282): a second renderer posing the action
     const pcv = offscreenCanvas(184, 270);
@@ -755,8 +758,11 @@ export class ActionBrowser extends EaselView {
       b.cellIndex = i; b.clickSound = 'brwzpic';
       this.add(b); this.cells.push(b);
     }
-    this.cycleTimer = setInterval(() => { if (this.cycling) { this.celn = (this.celn + 1) % this.ccel; this.pose(); } }, 1000 / FPS); // the preview cycles cels
-    this.onModalClose = () => { clearInterval(this.cycleTimer); previewRenderer.dispose(); };
+    // the preview cycles cels — rAF + matrix lerp under fps24 (like playbackLoop), a plain ~6fps interval otherwise
+    this.acc = 0; this.last = 0; this.raf = null; this._prevW = null; this._curW = null; this.cycleTimer = null;
+    if (renderOptions.fps24) { this.last = performance.now(); this.raf = requestAnimationFrame(this._tick); }
+    else this.cycleTimer = setInterval(() => { if (this.cycling) { this.celn = (this.celn + 1) % this.ccel; this.pose(); } }, 1000 / FPS);
+    this.onModalClose = () => { clearInterval(this.cycleTimer); if (this.raf) cancelAnimationFrame(this.raf); previewRenderer.dispose(); };
     this.makeButton('fwd', 'fwdc', X + 204, Y + 320, 59, 46, () => { this.pageIndex = Math.min(this.pageCount() - 1, this.pageIndex + 1); this.render(); }).clickSound = 'pagedn';
     this.makeButton('bback', 'bbackc', X + 54, Y + 320, 59, 46, () => { this.pageIndex = Math.max(0, this.pageIndex - 1); this.render(); }).clickSound = 'pageup';
     this.makeButton('b5celbk', 'b5celbks', X + 447, Y + 290, 27, 16, () => this.step(-1)).clickSound = 'systepb';
@@ -769,11 +775,28 @@ export class ActionBrowser extends EaselView {
 
   /** Total grid pages. */
   pageCount() { return Math.max(1, Math.ceil(this.actions.length / 20)); }
-  /** Pose the preview actor at (anid, celn) and render it framed. */
-  pose() {
+  /** rAF tick for the fps24 path — accumulates real time into whole cel steps,
+   *  then renders at the fractional remainder (mirrors playbackLoop._tick). */
+  _tick = (now) => {
+    const frameDur = 1000 / FPS;
+    this.acc += now - this.last; this.last = now;
+    while (this.acc >= frameDur) {
+      if (this.cycling) { this._prevW = this._curW; this.celn = (this.celn + 1) % this.ccel; }
+      this.acc -= frameDur;
+    }
+    this.pose(this.cycling ? this.acc / frameDur : 1);
+    this.raf = requestAnimationFrame(this._tick);
+  };
+  /** Pose the preview actor at (anid, celn) and render it framed. `t` in [0,1]
+   *  interpolates part matrices toward the current cel (fps24 smooth mode). */
+  pose(t = 1) {
     const { previewActor, meshes, previewScene, previewCamera, box3, tmpB, cV, sV } = this;
     previewActor._setActnCel(this.anid, this.celn); previewActor._positionBody();
-    const w = previewActor.partWorldMatrices();
+    let w = previewActor.partWorldMatrices();
+    this._curW = w;
+    const prev = t < 1 && this._prevW;
+    if (prev && prev.length === w.length)
+      w = w.map((m, i) => m.map((v, k) => prev[i][k] + (v - prev[i][k]) * t));
     box3.makeEmpty();
     previewActor.parts.forEach((p, i) => {
       if (!p.model) return;
@@ -795,13 +818,13 @@ export class ActionBrowser extends EaselView {
     this.anid = an;
     const act = this.previewActor._actn(an);
     this.ccel = act ? act.cels.length : 1;
-    this.celn = 0; this.celnStart = 0; this.cycling = true; this.pose();
+    this.celn = 0; this.celnStart = 0; this.cycling = true; this._prevW = null; this.pose();
   }
   /** Cel fwd/back — stops the cycling and steps the start cel by `d`. */
   step(d) {
     if (this.cycling) { this.cycling = false; this.celnStart = this.celn; }
     this.celnStart = (this.celnStart + d + this.ccel) % this.ccel;
-    this.celn = this.celnStart; this.pose();
+    this.celn = this.celnStart; this._prevW = null; this.pose();
   }
   /** Grid-cell click — selects the action and previews it. */
   pick(b) {
@@ -855,7 +878,7 @@ export class CostumeEasel extends EaselView {
     if (!appState.moviePlayer || !a || !a.onStage) return;
     const template = a.template;
     if (template.isTdt || !template.cbset) return;
-    appState.setSelectedChildId(movieEdits.childIdOf(a)); studioHost.syncRollCall(); playbackLoop.drawFrame();
+    appState.setSelectedChildId(movieEdits.childIdOf(a)); textboxEdits.setSelectedTextbox(-1); textboxEdits.setFocusedTextbox(-1); studioHost.syncRollCall(); playbackLoop.drawFrame();
     modalSlot.open(new CostumeEasel(a));
   };
   /** Build the panel, preview actor seeded with the actor's current costume,
@@ -869,8 +892,9 @@ export class CostumeEasel extends EaselView {
     this.previewElement = new CanvasEl(pcv, 112, 109, 416, 230);
     this.previewElement.pickable = true; this.previewElement.cursor = CURSORS.pointer;
     this.add(this.previewElement);
-    this.nameInput = this.domInput(110, 415, 420, 24);
+    this.nameInput = this.add(new TextField(110, 415, 420, 24));
     this.nameInput.maxLength = 50; this.nameInput.value = a.data.name || '';
+    this.nameInput.onCommit = () => this.commit(); // Enter = OK
     const previewRenderer = this.previewRenderer = new THREE.WebGLRenderer({ canvas: pcv });
     this.previewScene = new THREE.Scene();
     this.previewCamera = new THREE.PerspectiveCamera(25, 416 / 230, 0.1, 10000);

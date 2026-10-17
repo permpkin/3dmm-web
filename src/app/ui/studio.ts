@@ -6,7 +6,7 @@ import { CURSORS, cur } from './cursorManager.ts';
 import { uiSounds } from './uiSounds.ts';
 import { DWR_NIL } from '../../engine/actor.ts';
 import { FPS } from '../../engine/player.ts';
-import { hitTestTextbox } from '../../render/textbox.ts';
+import { hitTestTextbox, caretRect } from '../../render/textbox.ts';
 import { movieDocument } from '../movieDocument.ts';
 import { movieEdits } from '../edit/movieEdits.ts';
 import { soundEdits } from '../edit/soundEdits.ts';
@@ -22,7 +22,7 @@ import { ListenerEasel, ActionBrowser, SpletterEasel, CostumeEasel, SorterEasel,
 import { localizer } from '../localization.ts';
 import { View, uiRoot, UI_WIDTH, UI_HEIGHT } from './root.ts';
 import { Element } from './element.ts';
-import { ImageElement, StudioButton, TextLink, MovieScreen } from './widgets.ts';
+import { ImageElement, StudioButton, TextLink, MovieScreen, TextField } from './widgets.ts';
 import { textureCache } from './textureCache.ts';
 // Studio editor chrome — the 640x480 editor frame (backdrops, transport bar,
 // tab covers, secondary tool rows, popups, roll calls) surrounding the 3D view.
@@ -154,9 +154,18 @@ export class StudioView extends View {
     }
     textboxEdits.endTextboxSnapshot(); // any view click commits the pending text-edit burst
     const textboxHit = textboxEdits.pickTextbox(px, py);
-    if (textboxHit && (textboxEdits.TEXTBOX_TOOLS[appState.editorTools.tool] || appState.editorTools.tool === 'nuke')) { // textbox tools claim clicks that land on a box
+    if (textboxHit && (textboxEdits.TEXTBOX_TOOLS[appState.editorTools.tool] || appState.editorTools.tool === 'nuke' || appState.editorTools.tool === 'cut')) { // textbox tools claim clicks that land on a box
       const lx = px - textboxHit.l, ly = py - textboxHit.t, w = textboxHit.r - textboxHit.l, h = textboxHit.b - textboxHit.t;
       if (appState.editorTools.tool === 'nuke') { uiSounds.play('remwbox'); textboxEdits.removeTextbox(textboxHit); return; } // nuke deletes the clicked box outright
+      if (appState.editorTools.tool === 'cut') { // cut deletes the selected text, or the whole box when no text is selected (toolCutObject in the original)
+        uiSounds.play('cut');
+        const s = appState.textboxSelection;
+        if (textboxEdits.textboxIdOf(textboxHit) === appState.focusedTextboxId && s && s.anchor !== s.other) {
+          const [a, b] = s.anchor < s.other ? [s.anchor, s.other] : [s.other, s.anchor];
+          s.other = s.anchor = textboxEdits.deleteTextboxText(textboxHit, a, b); playbackLoop.drawFrame();
+        } else textboxEdits.removeTextbox(textboxHit);
+        return;
+      }
       if (textboxEdits.inTextboxBorder(lx, ly, w, h)) { // border band: select + start a move/resize drag (works for every tool)
         if ((appState.editorTools.tool === 'textboxStory' || appState.editorTools.tool === 'textboxCredit') && appState.selectedTextboxId !== textboxEdits.textboxIdOf(textboxHit)) { // scroll-type tools only accept the already-selected box
           textboxEdits.setSelectedTextbox(-1); playbackLoop.drawFrame(); return; // deselect instead
@@ -169,16 +178,18 @@ export class StudioView extends View {
       }
       // interior click: fill/type tools apply to the clicked box; the rest focus it and start a caret/selection drag
       if (appState.editorTools.tool === 'textboxFill') { textboxEdits.textboxOperation(textboxHit, () => { textboxHit.rtxt.acrBack = appState.textboxPaint.acr; textboxHit.rtxt._layout = null; }); return; } // apply armed fill color
-      if (appState.editorTools.tool === 'textboxStory' || appState.editorTools.tool === 'textboxCredit') { const fs = appState.editorTools.tool === 'textboxStory'; textboxEdits.textboxOperation(textboxHit, () => { textboxHit.fStory = fs; }); return; } // set scroll type on any box, selected or not
+      if (appState.editorTools.tool === 'textboxStory' || appState.editorTools.tool === 'textboxCredit') { const fs = appState.editorTools.tool === 'textboxStory'; uiSounds.play(fs ? 'wscroff' : 'wscron'); textboxEdits.textboxOperation(textboxHit, () => { textboxHit.fStory = fs; }); return; } // set scroll type on any box, selected or not
       textboxEdits.setFocusedTextbox(textboxEdits.textboxIdOf(textboxHit)); appState.setSelectedChildId(-1);
+      textboxEdits.setSelectedTextbox(textboxEdits.textboxIdOf(textboxHit)); // interior clicks re-select the box — the resize chrome stays up while editing
       const cp = hitTestTextbox(textboxHit, appState.sceneRenderer.ovCtx, appState.sceneRenderer.palColors, px, py); // interior: caret + text selection dragSession
       appState.setTextboxSelection({ anchor: cp, other: cp });
+      textboxEdits.ensureCaretVisible(textboxHit);
       dragSession = { kind: 'textboxEdit', textbox: textboxHit, paint: PAINT_CHANGES[appState.editorTools.tool] || null };
       playbackLoop.drawFrame();
       return;
     }
     if (textboxEdits.TEXTBOX_TOOLS[appState.editorTools.tool]) { // text mode skips actor picking entirely: a miss just deselects the box
-      if (appState.selectedTextboxId >= 0) { textboxEdits.setSelectedTextbox(-1); playbackLoop.drawFrame(); }
+      if (appState.selectedTextboxId >= 0 || appState.focusedTextboxId >= 0) { textboxEdits.setSelectedTextbox(-1); textboxEdits.setFocusedTextbox(-1); playbackLoop.drawFrame(); }
       return;
     }
     const [nx, ny] = viewNdc(rawEvent);
@@ -190,6 +201,7 @@ export class StudioView extends View {
     }
     const a = appState.sceneRenderer.pickActor(nx, ny);
     appState.setSelectedChildId(a ? movieEdits.childIdOf(a) : -1);
+    if (appState.selectedTextboxId >= 0 || appState.focusedTextboxId >= 0) { textboxEdits.setSelectedTextbox(-1); textboxEdits.setFocusedTextbox(-1); } // SelectActr unhilites the tbox in the original
     for (const list of thumbnails.rollCallLists) { // keep the roll-call highlight in sync w/ the view pick
       const i2 = a ? thumbnails.rollCallActors(list).indexOf(a) : -1;
       list.selected = i2;
@@ -333,10 +345,11 @@ export class StudioView extends View {
         rc.l = Math.max(0, Math.min(rc0.l + dx, 544 - (rc0.r - rc0.l))); rc.t = Math.max(0, Math.min(rc0.t + dy, 306 - (rc0.b - rc0.t)));
         rc.r = rc.l + (rc0.r - rc0.l); rc.b = rc.t + (rc0.b - rc0.t);
       } else {
-        if (anchor.includes('left')) rc.l = Math.max(0, Math.min(rc0.l + dx, rc0.r - textboxEdits.TEXTBOX_MIN_WIDTH));
-        if (anchor.includes('right')) rc.r = Math.min(544, Math.max(rc0.r + dx, rc0.l + textboxEdits.TEXTBOX_MIN_WIDTH));
-        if (anchor.includes('up')) rc.t = Math.max(0, Math.min(rc0.t + dy, rc0.b - textboxEdits.TEXTBOX_MIN_HEIGHT));
-        if (anchor.includes('down')) rc.b = Math.min(306, Math.max(rc0.b + dy, rc0.t + textboxEdits.TEXTBOX_MIN_HEIGHT));
+        const an = anchor.toLowerCase(); // corner anchors are camelCase ('downRight') — match both axes case-insensitively
+        if (an.includes('left')) rc.l = Math.max(0, Math.min(rc0.l + dx, rc0.r - textboxEdits.TEXTBOX_MIN_WIDTH));
+        if (an.includes('right')) rc.r = Math.min(544, Math.max(rc0.r + dx, rc0.l + textboxEdits.TEXTBOX_MIN_WIDTH));
+        if (an.includes('up')) rc.t = Math.max(0, Math.min(rc0.t + dy, rc0.b - textboxEdits.TEXTBOX_MIN_HEIGHT));
+        if (an.includes('down')) rc.b = Math.min(306, Math.max(rc0.b + dy, rc0.t + textboxEdits.TEXTBOX_MIN_HEIGHT));
       }
       Object.assign(textbox, rc);
       textbox.rtxt._layout = null;
@@ -346,6 +359,7 @@ export class StudioView extends View {
     if (dragSession?.kind === 'textboxEdit') { // caret drag: extend the text selection to the cursor position
       const [px, py] = appState.lastViewPoint;
       appState.textboxSelection.other = hitTestTextbox(dragSession.textbox, appState.sceneRenderer.ovCtx, appState.sceneRenderer.palColors, px, py);
+      textboxEdits.ensureCaretVisible(dragSession.textbox);
       playbackLoop.drawFrame();
       return;
     }
@@ -498,10 +512,10 @@ export class StudioView extends View {
     if (!dragSession && !recording && !rotation && !transformDrag) {
       if (appState.textboxAttachment) { view.cursor = CURSORS.textboxCreate; viewCursor(rawEvent); return; }
       const cur = TOOL_CURSORS[appState.editorTools.tool];
-      if (textboxEdits.TEXTBOX_TOOLS[appState.editorTools.tool] || (appState.editorTools.tool === 'nuke' && textboxEdits.pickTextbox(px, py))) { // textbox tools pick their cursor by hover position
+      if (textboxEdits.TEXTBOX_TOOLS[appState.editorTools.tool] || ((appState.editorTools.tool === 'nuke' || appState.editorTools.tool === 'cut') && textboxEdits.pickTextbox(px, py))) { // textbox tools pick their cursor by hover position
         const textbox = textboxEdits.pickTextbox(px, py);
         if (!textbox) { view.cursor = appState.editorTools.tool === 'textboxSelect' ? TOOL_CURSORS.textboxSelect : (cur ?? null); viewCursor(rawEvent); return; }
-        if (appState.editorTools.tool === 'nuke') { view.cursor = TOOL_CURSORS.nuke; viewCursor(rawEvent); return; }
+        if (appState.editorTools.tool === 'nuke' || appState.editorTools.tool === 'cut') { view.cursor = TOOL_CURSORS[appState.editorTools.tool]; viewCursor(rawEvent); return; }
         const lx = px - textbox.l, ly = py - textbox.t, w = textbox.r - textbox.l, h = textbox.b - textbox.t;
         if (appState.editorTools.tool === 'textboxSelect') { // border anchor cursors; ibeam over the text
           if (textboxEdits.inTextboxBorder(lx, ly, w, h)) {
@@ -554,23 +568,33 @@ export class StudioView extends View {
       const [x, y] = b > a ? [a, b]
         : e.key === 'Backspace' ? [Math.max(0, a - 1), a] : [a, Math.min(doc.text.length, a + 1)];
       appState.textboxSelection.other = appState.textboxSelection.anchor = textboxEdits.deleteTextboxText(textbox, x, y);
-      playbackLoop.drawFrame();
+      textboxEdits.ensureCaretVisible(textbox); playbackLoop.drawFrame();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (b > a) textboxEdits.deleteTextboxText(textbox, a, b);
       appState.textboxSelection.other = appState.textboxSelection.anchor = textboxEdits.insertTextboxText(textbox, a, '\r');
-      playbackLoop.drawFrame();
+      textboxEdits.ensureCaretVisible(textbox); playbackLoop.drawFrame();
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       const d = e.key === 'ArrowLeft' ? -1 : 1;
       if (e.shiftKey) appState.textboxSelection.other = Math.max(0, Math.min(doc.text.length, appState.textboxSelection.other + d));
       else appState.textboxSelection.other = appState.textboxSelection.anchor = b > a ? (d < 0 ? a : b) : Math.max(0, Math.min(doc.text.length, a + d));
-      playbackLoop.drawFrame();
+      textboxEdits.ensureCaretVisible(textbox); playbackLoop.drawFrame();
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Home' || e.key === 'End') { // line/edge caret movement, like the original's FCmdKey
+      e.preventDefault();
+      const ov = appState.sceneRenderer.ovCtx, pal = appState.sceneRenderer.palColors;
+      const c = caretRect(textbox, ov, pal, appState.textboxSelection.other);
+      let cp;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') cp = hitTestTextbox(textbox, ov, pal, c.x, e.key === 'ArrowUp' ? c.y - 1 : c.y + c.h + 1);
+      else cp = hitTestTextbox(textbox, ov, pal, e.key === 'Home' ? textbox.l : textbox.r, c.y + 1);
+      if (e.shiftKey) appState.textboxSelection.other = cp;
+      else appState.textboxSelection.other = appState.textboxSelection.anchor = cp;
+      textboxEdits.ensureCaretVisible(textbox); playbackLoop.drawFrame();
     } else if (e.key.length === 1) {
       e.preventDefault();
       if (b > a) textboxEdits.deleteTextboxText(textbox, a, b);
       appState.textboxSelection.other = appState.textboxSelection.anchor = textboxEdits.insertTextboxText(textbox, a, e.key);
-      playbackLoop.drawFrame();
+      textboxEdits.ensureCaretVisible(textbox); playbackLoop.drawFrame();
     }
   });
   /** Escape key: drops a mouse-attached textbox, collapses a text selection,
@@ -602,28 +626,22 @@ export class StudioView extends View {
     V.add(ver);
   }
   { // the movie-name field doubles as the rename control — clicking swaps in a
-    // DOM input floated over the canvas (real text entry stays DOM until the
-    // canvas gets an IME-capable input element)
+    // canvas TextField over the slot
     const nameEl = namedElements.stname;
     nameEl.pickable = true; nameEl.cursor = CURSORS.ibeam;
-    nameEl.onClick = () => {
-      const nm = elementById('stnameInp'); if (nm) return;
-      const inp = document.createElement('input');
-      inp.id = 'stnameInp'; inp.className = 'stNameInp'; inp.value = appState.moviePlayer.movie.name || ''; inp.maxLength = 64;
-      inp.style.cssText = 'position:absolute;left:4.6875%;top:96.66%;width:46.25%;height:3.33%;z-index:56;';
-      elementById('studio').appendChild(inp);
-      inp.focus(); inp.select();
-      let done = false;
-      const commit = (ok) => {
-        if (done) return; done = true;
-        if (ok && inp.value.trim()) { appState.moviePlayer.movie.name = inp.value.trim(); movieDocument.markDocumentDirty(); }
-        inp.remove();
-        studioHost.sync();
-      };
-      inp.onkeydown = (e) => { if (e.key === 'Enter') commit(true); else if (e.key === 'Escape') commit(false); e.stopPropagation(); };
-      inp.onblur = () => commit(true);
-      inp.onclick = (e) => e.stopPropagation();
+    const nameField = new TextField(30, 464, 296, 16);
+    nameField.bevel = false; nameField.bg = '#cfe8ff'; nameField.padX = 3;
+    nameField.font = "bold 13px 'Comic Sans MS', cursive, sans-serif";
+    nameField.maxLength = 64; nameField.visible = false; nameField.commitOnBlur = true;
+    const commit = (ok, v) => {
+      nameField.visible = false; nameField.blur(false);
+      if (ok && v.trim()) { appState.moviePlayer.movie.name = v.trim(); movieDocument.markDocumentDirty(); }
+      studioHost.sync();
     };
+    nameField.onCommit = (v) => commit(true, v);
+    nameField.onCancel = () => commit(false, '');
+    V.add(nameField); namedElements.stnameField = nameField;
+    nameEl.onClick = () => { nameField.value = appState.moviePlayer.movie.name || ''; nameField.visible = true; nameField.focus(true); };
   }
   const stSliders = [];
   /** Denominator for the scene-scrub slider: last scene index, clamped to 1. */
@@ -1104,7 +1122,7 @@ const scrollPopupCells = [];
       }
     }
     /** Click — select the cell's actor/prop in the editor. */
-    onClick() { const a = thumbnails.rollCallActors(this.list)[this.list.offset + this.i]; if (a) { uiSounds.play('select'); this.list.selected = this.list.offset + this.i; appState.setSelectedChildId(movieEdits.childIdOf(a)); studioHost.syncRollCall(); playbackLoop.drawFrame(); } }
+    onClick() { const a = thumbnails.rollCallActors(this.list)[this.list.offset + this.i]; if (a) { uiSounds.play('select'); this.list.selected = this.list.offset + this.i; appState.setSelectedChildId(movieEdits.childIdOf(a)); textboxEdits.setSelectedTextbox(-1); textboxEdits.setFocusedTextbox(-1); studioHost.syncRollCall(); playbackLoop.drawFrame(); } }
   }
   class RollCallArrow extends Element {
     constructor(list, img, x, w, scroll) {
@@ -1347,7 +1365,7 @@ class StudioHost {
   namedElements.stfnum.textContent = appState.moviePlayer.scene ? appState.moviePlayer.frame - appState.moviePlayer.scene.nfrmFirst + 1 : '–';
   namedElements.stsnum.textContent = appState.moviePlayer.sceneIndex >= 0 ? appState.moviePlayer.sceneIndex + 1 : '–';
   const nm = namedElements.stname;
-  if (!elementById('stnameInp')) nm.textContent = appState.moviePlayer.movie.name || localizer.translate('doc.untitled');
+  if (!namedElements.stnameField?.visible) nm.textContent = appState.moviePlayer.movie.name || localizer.translate('doc.untitled');
   for (const s of (this.view as any)._stSliders || []) s.sync();
   { // the frame thumb shows the speaker face while a sound event lands
     // exactly on the current frame (a scene PlaySnd event or an actor Snd event)

@@ -589,7 +589,7 @@ export class Renderer {
     if (out) { gl.setRenderTarget(null); gl.clear(); gl.render(this.copyScene, this.bgCam); }
     // textbox overlay — suppressed during scene transitions
     const textboxes = trans ? [] : moviePlayer.textboxes || [];
-    drawTextboxes(this.ovCtx, textboxes, this.palColors, WIDTH, HEIGHT, this.textboxChrome);
+    drawTextboxes(this.ovCtx, textboxes, this.palColors, WIDTH, HEIGHT, this.textboxChrome, this.gl.domElement);
     if (textboxes.length) { this.ovTex.needsUpdate = true; gl.render(this.ovScene, this.bgCam); }
   }
 }

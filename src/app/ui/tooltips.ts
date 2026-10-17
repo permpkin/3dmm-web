@@ -3,7 +3,6 @@ import { baseUrl } from '../resources.ts';
 import { uiRoot, UI_WIDTH, UI_HEIGHT } from './root.ts';
 import { Element } from './element.ts';
 import { localizer } from '../localization.ts';
-import { CURSORS } from './cursorManager.ts';
 // Dwell tooltips — callout balloons drawn from 9-slice skins (cobllnN.png)
 // with the red arrow baked in; the skin's reg point is the arrow tip. Hovering
 // a control ~1.2s shows its tip (suppressed while playing). ------------
@@ -59,10 +58,13 @@ export function gortFlexMap(t, D, v) {
 // The tip layer sits above the view stack (added in UiRoot._rebuild).
 const tooltipLayer = () => uiRoot.tips;
 
-/** Run-class styles — 't' is the bold title, 'hot'/1 the link-blue runs. */
-const RUN_STYLE = { 't': { bold: true, color: '#1a1a1a' }, 'hot': { bold: false, color: '#1332be' }, 1: { bold: false, color: '#1332be' } };
-/** Tip font for a run's bold flag. */
-const TIP_FONT = (b) => `${b ? 'bold ' : ''}10px 'Comic Sans MS', cursive, sans-serif`;
+/** Run-class styles — 't' is the bold title (larger), 'hot'/1 the link-blue runs. */
+const RUN_STYLE = { 't': { bold: true, color: '#1a1a1a', size: 13 }, 'hot': { bold: false, color: '#1332be' }, 1: { bold: false, color: '#1332be' } };
+/** Tip font for a run. */
+const TIP_FONT = (r) => `${r.bold ? 'bold ' : ''}${r.size || 10}px 'Comic Sans MS', cursive, sans-serif`;
+/** Title->body line pitch — also the text inset inside the balloon skin, so
+ *  the padding around the text matches the title/body gap. */
+const TIP_GAP = 9;
 
 /** Wrap styled runs into lines: returns {lines:[[{text,bold,color,x}]..], w, h}. */
 function layoutRuns(parts, maxW, ctx) {
@@ -74,40 +76,33 @@ function layoutRuns(parts, maxW, ctx) {
     }
   if (tokens.length && tokens[tokens.length - 1].br) tokens.pop();
   const lines = []; let line = [], lx = 0;
-  const meas = (w, b) => { ctx.font = TIP_FONT(b); return ctx.measureText(w).width; };
+  const meas = (w, st) => { ctx.font = TIP_FONT(st); return ctx.measureText(w).width; };
   for (const tk of tokens) {
     if (tk.br) { lines.push(line); line = []; lx = 0; continue; }
     const st = RUN_STYLE[tk.cls] || { bold: false, color: '#1a1a1a' };
-    const w = meas(tk.text, st.bold);
+    const w = meas(tk.text, st);
     if (lx + w > maxW && lx > 0 && !/^\s+$/.test(tk.text)) { lines.push(line); line = []; lx = 0; }
     if (lx === 0 && /^\s+$/.test(tk.text)) continue; // drop leading space on a new line
     line.push({ text: tk.text, ...st, x: lx, w });
     lx += w;
   }
   if (line.length) lines.push(line);
-  return { lines, w: Math.max(0, ...lines.map((l) => l.length ? l[l.length - 1].x + l[l.length - 1].w : 0)), h: lines.length * 12 };
+  // per-line heights: the title line packs tight over the body, body lines
+  // keep the 12px pitch
+  let y = 0;
+  for (const l of lines) { l.y = y; y += l.some((r) => (r.size || 10) > 10) ? TIP_GAP : 12; }
+  return { lines, w: Math.max(0, ...lines.map((l) => l.length ? l[l.length - 1].x + l[l.length - 1].w : 0)), h: y };
 }
 
-/** A callout balloon — 9-slice tiled skin, wrapped text runs, and the close
- *  button in the corner. `sticky` balloons stay until dismissed. */
+/** A callout balloon — 9-slice tiled skin with wrapped text runs. `sticky`
+ *  balloons stay until dismissed (any pointerdown). */
 class Balloon extends Element {
   constructor(dir, gx, gy, W, H, parts, sticky, ctx2) {
     super(Math.round(gx), Math.round(gy), Math.round(W), Math.round(H));
     this.dir = dir; this.parts = parts; this.sticky = sticky;
-    const [, , , , bl, bt, br, bb, thz, tvz] = CALLOUT_SKINS[dir];
-    const lay = layoutRuns(parts, Math.min(W - bl - br - 22, 200), ctx2);
+    const [, , , , bl, bt, br, bb] = CALLOUT_SKINS[dir];
+    const lay = layoutRuns(parts, Math.min(W - bl - br - 2 * TIP_GAP, 200), ctx2);
     this.lay = lay; this.bl = bl; this.bt = bt; this.br = br; this.bb = bb;
-    this.xEl = (new Element(W - br - 18, H - bb - 18, 16, 16) as Element & {_dn: boolean}); // the balloon's close button
-    this.xEl.cursor = CURSORS.pointer;
-    this.xEl._dn = false;
-    this.xEl.draw = (ctx) => {
-      const image = new Image(); image.src = baseUrl + `textures/cancbtn${this.xEl._dn ? '3' : '1'}.png`;
-      if (image.complete && image.naturalWidth) ctx.drawImage(image, 0, 0, 16, 16);
-      else image.onload = () => this.xEl.dirty();
-    };
-    this.xEl.onPointerDown = () => { this.xEl._dn = true; this.xEl.dirty(); return true; };
-    this.xEl.onClick = () => tooltips.dismiss();
-    this.add(this.xEl);
   }
   /** Paint the 9-slice skin stretched to fit, then the text runs. */
   draw(ctx) {
@@ -120,9 +115,9 @@ class Balloon extends Element {
         ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
     // text runs in the content rc
     for (const line of this.lay.lines) for (const r of line) {
-      ctx.font = TIP_FONT(r.bold); ctx.fillStyle = r.color;
+      ctx.font = TIP_FONT(r); ctx.fillStyle = r.color;
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-      ctx.fillText(r.text, this.bl + r.x, this.bt + this.lay.lines.indexOf(line) * 12);
+      ctx.fillText(r.text, this.bl + TIP_GAP + r.x, this.bt + TIP_GAP + line.y);
     }
   }
 }
@@ -142,8 +137,8 @@ function showCalloutImpl(target, parts, sticky) {
   for (const dir of pref) {
     const [bw, bh, rx, ry, bl, bt, br, bb, thz, tvz] = CALLOUT_SKINS[dir];
     const lay = layoutRuns(parts, 200, measCtx); // content measure (max doc width ~200)
-    const tw = lay.w + 10, th = lay.h + 4;
-    const W = Math.max(bl + br + tw + 22, 76), H = Math.max(bb + bt + Math.max(th, 20), 60);
+    const tw = lay.w + 2 * TIP_GAP, th = lay.h + 2 * TIP_GAP;
+    const W = Math.max(bl + br + tw, 76), H = Math.max(bb + bt + th, 60);
     const gx = tx - gortFlexMap(thz, W, rx), gy = ty - gortFlexMap(tvz, H, ry);   // arrow tip at target
     if (gx < 2 || gy < 2 || gx + W > 638 || gy + H > 478) continue;
     const img = calloutImages[dir];
@@ -212,7 +207,7 @@ class TooltipManager {
     // Dwell tracking: the UI canvas computes the hit element; a tip id on it
     // (or an ancestor) schedules the balloon.
     document.addEventListener('pointermove', (e) => {
-      if (this.element?.sticky) return; // guide stays until click/X
+      if (this.element?.sticky) return; // guide stays until a click dismisses it
       let el = null;
       if (e.target === uiRoot.canvas) {
         const r = uiRoot.canvas.getBoundingClientRect();

@@ -21,10 +21,10 @@ import { uiSounds } from './uiSounds.ts';
  *  — the pickers' fixed 640x480 layouts. */
 export const BROWSER_DEFS = {
   // scene + backdrop pickers share the book1 layout at (62,48); 136x78 frames.
-  scene: { bookSkin: 'book1', x: 62, y: 48, frameWidth: 136, frameHeight: 78, cellFrameSkin: 'frame1', columns: 3, rows: 3, gridX: 40, gridY: 40, cellStepX: 150, cellStepY: 87, forwardButton: [303, 320], backButton: [155, 320], pageText: [226, 340], cancelButton: [437, 320] },
-  bkgd: { bookSkin: 'book1', x: 62, y: 48, frameWidth: 136, frameHeight: 78, cellFrameSkin: 'frame1', columns: 3, rows: 3, gridX: 40, gridY: 40, cellStepX: 150, cellStepY: 87, forwardButton: [303, 320], backButton: [155, 320], pageText: [226, 340], cancelButton: [437, 320] },
-  // camera picker: book2 at (62,100), same grid, frame2 cells
-  cam:  { bookSkin: 'book2', x: 62, y: 100, frameWidth: 136, frameHeight: 78, cellFrameSkin: 'frame2', columns: 3, rows: 3, gridX: 40, gridY: 40, cellStepX: 150, cellStepY: 87, forwardButton: [303, 320], backButton: [155, 320], pageText: [226, 340], cancelButton: [437, 320] },
+  scene: { bookSkin: 'book1', x: 62, y: 48, frameWidth: 136, frameHeight: 78, cellFrameSkin: 'frame1', columns: 3, rows: 3, gridX: 40, gridY: 40, cellStepX: 150, cellStepY: 87, forwardButton: [303, 320], backButton: [155, 320], pageText: [226, 337], cancelButton: [437, 320] },
+  bkgd: { bookSkin: 'book1', x: 62, y: 48, frameWidth: 136, frameHeight: 78, cellFrameSkin: 'frame1', columns: 3, rows: 3, gridX: 40, gridY: 40, cellStepX: 150, cellStepY: 87, forwardButton: [303, 320], backButton: [155, 320], pageText: [226, 337], cancelButton: [437, 320] },
+  // camera picker: book2 at (62,54) — centered vertically, same grid, frame2 cells
+  cam:  { bookSkin: 'book2', x: 62, y: 54, frameWidth: 136, frameHeight: 78, cellFrameSkin: 'frame2', columns: 3, rows: 3, gridX: 40, gridY: 40, cellStepX: 150, cellStepY: 87, forwardButton: [303, 320], backButton: [155, 320], pageText: [226, 337], cancelButton: [437, 320] },
   actor: { bookSkin: 'book3', x: 62, y: 47, frameWidth: 80, frameHeight: 80, cellFrameSkin: 'frame3', columns: 5, rows: 3, gridX: 30, gridY: 38, cellStepX: 94, cellStepY: 94, forwardButton: [304, 322], backButton: [155, 322], pageText: [228, 337], cancelButton: [437, 320] },
   prop: { bookSkin: 'book4', x: 62, y: 47, frameWidth: 80, frameHeight: 80, cellFrameSkin: 'frame4', columns: 5, rows: 3, gridX: 30, gridY: 38, cellStepX: 94, cellStepY: 94, forwardButton: [304, 322], backButton: [155, 322], pageText: [228, 337], cancelButton: [437, 320] },
   // sound name-list browsers: book6=midi, book7=fx, book8=speech
@@ -113,7 +113,7 @@ export class AssetBrowserView extends ModalView {
     this.pageTextEl.draw = (ctx) => {
       ctx.fillStyle = '#333'; ctx.font = "bold 15px 'Comic Sans MS', cursive, sans-serif";
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(localizer.translate('ui.pageNum', { page: this.pageIndex + 1, total: this.pageCount() }), 32, 14);
+      ctx.fillText(localizer.translate('ui.pageNum', { page: this.pageIndex + 1, total: this.pageCount() }), 32, 9);
     };
     this.add(this.pageTextEl);
     this.cells = [];

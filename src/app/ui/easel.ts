@@ -1,14 +1,12 @@
 // Easel shell — the canvas-hosted modal dialogs ("easels"). An
 // easel is a View pushed onto the uiRoot stack; it shares the modalSlot.view
 // slot so AssetBrowserView.show()/modalSlot.close()/Escape treat easels and
-// book browsers uniformly. Real <input> elements stay DOM overlays (text entry
-// needs the OS caret/IME) — EaselView.overlayElement() floats them over the
-// canvas at logical 640x480 coords; they're removed when the view leaves.
+// book browsers uniformly. Text entry uses canvas TextField widgets
+// (widgets.ts) — no DOM overlays.
 import { View, uiRoot } from './root.ts';
 import { Element } from './element.ts';
 import { ImageElement, StudioButton } from './widgets.ts';
 import { textureCache } from './textureCache.ts';
-import { elementById } from '../resources.ts';
 import { ModalView, modalSlot } from './modal.ts';
 import { CURSORS } from './cursorManager.ts';
 import { uiSounds } from './uiSounds.ts';
@@ -156,15 +154,6 @@ export class FramedCell extends Element {
 export class EaselView extends ModalView { // modal semantics live in ModalView (modal.ts)
   /** Easels play the slide-open sound when pushed onto the modal slot. */
   openSound = 'ezlopen';
-  /** Float a DOM element over the UI canvas at logical 640x480 coords. */
-  static overlayElement(el, x, y, w, h) {
-    el.style.position = 'absolute';
-    el.style.left = (x / 6.4) + '%'; el.style.top = (y / 4.8) + '%';
-    el.style.width = (w / 6.4) + '%'; el.style.height = (h / 4.8) + '%';
-    el.style.zIndex = '57'; // above #uiRoot (55), below optModal (60)
-    elementById('studio').appendChild(el);
-    return el;
-  }
   /** Add an ImageElement and return it. */
   makeImage(n, x, y, w, h) { const image = new ImageElement(n, x, y, w, h); this.add(image); return image; }
   /** Add a StudioButton and return it — face names ending 'okay'/'can'
@@ -173,12 +162,5 @@ export class EaselView extends ModalView { // modal semantics live in ModalView 
     const b = new StudioButton(up, dn, x, y, w, h, act, tip);
     if (/okay$/.test(up)) b.clickSound = 'ok'; else if (/can$|cancel$/.test(up)) b.clickSound = 'cancel';
     this.add(b); return b;
-  }
-  /** Create a DOM text input floated over the canvas at logical coords —
-   *  auto-registered for hide/pop with the view. */
-  domInput(x, y, w, h, cls = 'spltInp') {
-    const inp = document.createElement('input');
-    inp.className = cls;
-    return this.addDom(EaselView.overlayElement(inp, x, y, w, h));
   }
 }

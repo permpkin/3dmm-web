@@ -193,6 +193,7 @@ pack somewhere CORS-enabled and use its URL instead.)
 | `opts` | Comma-separated renderer flags — `fps24`, `modernLighting`, `shadows`, `castOnOthers`, `selfShadow`, `smoothTex`, `smoothVerts`, `scale2x`, `aa`, `wireframe` (e.g. `?opts=fps24,shadows`). See [render settings](#render-settings). |
 | `menu` | Open the render settings dialog on boot (`?menu`). |
 | `packs` | Comma-separated `assets.json` URLs (or directories containing one) — imports [asset packs](#asset-packs) (e.g. `?packs=/expansions/NICK3D` locally, or a remote URL). |
+| `vxp` | Comma-separated `.vxp` URLs — v3dmm expansion archives (renamed zips of `.3cn`/`.3th`/`.cfg`). Each is fetched once, cached in IndexedDB (`mmsvxp`), unzipped, and merged like an asset pack — actors/props/sounds/backgrounds appear in the browsers (e.g. `?vxp=https://example.com/mod.vxp`). `{a,b,c}` alternates expand too: `?vxp=https://example.com/{mod1,mod2}.vxp` loads both files from one base URL. |
 | `sf` | Sound bank URL for MIDI music (`.sf2`/`.sf3`/`.dls`) — overrides [auto-detection](#midi-sound). |
 | `lang` | UI language code (e.g. `?lang=fr`, or `auto` for the browser language) — loads `lang/<code>.json` over the bundled English strings; missing keys fall back to English. Drop additional `<code>.json` files into `public/lang/` to add a language (see `lang/en.json` for the key format). |
 | `castid` | Chromecast CAF receiver application id — overrides the built-in default for the **cast** link in theatre mode (see [casting](#casting)). |

@@ -1,4 +1,5 @@
 import { SEVT } from '../../format/movie.ts';
+import { caretRect, measureTextbox } from '../../render/textbox.ts';
 import { appState } from '../appState.ts';
 import { SPRM } from '../../format/content.ts';
 import { playbackLoop } from '../playbackLoop.ts';
@@ -41,6 +42,24 @@ export class TextboxEdits {
   appState.setFocusedTextboxId(chid);
   appState.setTextboxSelection(chid >= 0 ? (appState.textboxSelections.get(chid) || { anchor: 0, other: 0 }) : null);
 }
+  /** Scroll the focused box's edit offset (_dypEdit) so the selection stays
+   *  visible — mirrors the original's SetSel scroll-to-caret behavior, which
+   *  keeps both ends of the selection in view (or just the caret end when the
+   *  selection is taller than the box). */
+  ensureCaretVisible = (textbox) => {
+    const sel = appState.textboxSelection, r = appState.sceneRenderer;
+    if (!sel || !textbox?.rtxt || !r?.ovCtx) return;
+    const ra = caretRect(textbox, r.ovCtx, r.palColors, sel.anchor);
+    const rb = caretRect(textbox, r.ovCtx, r.palColors, sel.other);
+    const top = textbox.t + this.TEXTBOX_BORDER, bot = textbox.b - this.TEXTBOX_BORDER;
+    let y0 = Math.min(ra.y, rb.y), y1 = Math.max(ra.y + ra.h, rb.y + rb.h);
+    if (y1 - y0 > bot - top) { y0 = rb.y; y1 = rb.y + rb.h; }
+    let d = textbox._dypEdit || 0;
+    if (y0 < top) d -= top - y0;
+    if (y1 > bot) d += y1 - bot;
+    d = Math.max(0, Math.min(d, measureTextbox(textbox, r.ovCtx, r.palColors).maxScroll));
+    if (d !== (textbox._dypEdit || 0)) textbox._dypEdit = d;
+  }
   /** Child id for a textbox record — -1 when absent. */
   textboxIdOf = (textbox) => { if (!appState.moviePlayer?.scene) return -1; for (const [c, x] of appState.moviePlayer.scene.textboxes) if (x === textbox) return c; return -1; };
   /** Topmost visible textbox under a view-space point, or null. */
@@ -93,7 +112,7 @@ export class TextboxEdits {
   /** Start (or continue) a text-edit burst on a textbox — successive
    *  keystrokes keep amending the same pending snapshot. */
   beginTextboxSnapshot = (textbox) => {
-  if (appState.textboxSnapshot && appState.textboxSnapshot.tb !== textbox) this.endTextboxSnapshot();
+  if (appState.textboxSnapshot && appState.textboxSnapshot.textbox !== textbox) this.endTextboxSnapshot();
   if (!appState.textboxSnapshot) appState.setTextboxSnapshot({ textbox, d0: this.textboxSnapshotOf(textbox) });
 }
   /** Commit the pending burst as one undo op — called before unrelated ops
@@ -220,8 +239,8 @@ export class TextboxEdits {
   /** Insert text at `cp` — shifting style entries past the insert. Returns
    *  the new caret position. */
   insertTextboxText = (textbox, cp, str) => {
+  this.beginTextboxSnapshot(textbox); // before reading rtxt — ending another box's burst can swap it
   const doc = textbox.rtxt;
-  this.beginTextboxSnapshot(textbox);
   const n = str.length;
   doc.text = doc.text.slice(0, cp) + str + doc.text.slice(cp);
   for (const m of doc.mpes) if (m.cp > cp) m.cp += n;
@@ -233,9 +252,10 @@ export class TextboxEdits {
   /** Delete [a,b) — pulling interior style entries back to `a`. Returns the
    *  new caret position. */
   deleteTextboxText = (textbox, a, b) => {
-  const doc = textbox.rtxt, n = b - a;
+  const n = b - a;
   if (n <= 0) return a;
   this.beginTextboxSnapshot(textbox);
+  const doc = textbox.rtxt;
   doc.text = doc.text.slice(0, a) + doc.text.slice(b);
   for (const m of doc.mpes) { if (m.cp >= a && m.cp <= b) m.cp = a; else if (m.cp > b) m.cp -= n; }
   doc.mpes.sort((x, y) => x.sprm - y.sprm || x.cp - y.cp);

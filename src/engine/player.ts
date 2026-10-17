@@ -112,7 +112,7 @@ export class MoviePlayer {
       .map((chid) => s.textboxes.get(chid))
       .filter((textbox) => textbox && nfrm >= textbox.nfrmFirst && nfrm < textbox.nfrmMax);
     for (const textbox of this.textboxes) { // measure credit-scroll height for the scroll hold
-      if (textbox._scv === undefined) textbox._scv = 0; // scroll position persists across seeks
+      if (textbox._scv === undefined || nfrm <= textbox.nfrmFirst) textbox._scv = 0; // scroll position resets whenever (re)landing on the first frame
       if (!textbox.fStory && typeof document !== 'undefined') // headless runs (tests/tools) skip scroll measurement
         textbox._maxScroll = measureTextbox(textbox, this._tbCtx ||= document.createElement('canvas').getContext('2d')).maxScroll;
     }
@@ -139,6 +139,27 @@ export class MoviePlayer {
     for (const e of this.scene.frameEvents) if (e.nfrm === this.frame) this._fireSnd(e);
   }
 
+  /** Advance credit-scroll offsets by real elapsed time — a non-story textbox
+   *  on its first frame scrolls upward at TEXTBOX_SCROLL_PIXELS_PER_SECOND.
+   *  The original scrolls on its own ~5ms alarm independent of the frame clock,
+   *  so this runs every repaint, not just per step. Returns true while a
+   *  textbox still needs to scroll (the scroll hold). */
+  updateScroll() {
+    let scrollHold = false;
+    const now = performance.now();
+    const dt = Math.min(250, now - (this._scrollT || now));
+    this._scrollT = now;
+    for (const textbox of this.textboxes || []) {
+      if (textbox.fStory || this.frame !== textbox.nfrmFirst) continue;
+      const target = textbox._maxScroll || 0;
+      if ((textbox._scv || 0) < target) {
+        textbox._scv = Math.min(target, (textbox._scv || 0) + (dt / 1000) * TEXTBOX_SCROLL_PIXELS_PER_SECOND);
+        if (textbox._scv < target) scrollHold = true;
+      }
+    }
+    return scrollHold;
+  }
+
   /** Advance one frame, moving to the next scene at the end. Returns false at movie end. */
   step() {
     if (!this.scene) return false;
@@ -150,19 +171,7 @@ export class MoviePlayer {
     this._sndDirty = false;
     // Credit-scroll hold: a non-story textbox on its first frame holds
     // playback and scrolls upward until its remaining text has passed through
-    let scrollHold = false;
-    const now = performance.now();
-    const dt = Math.min(250, now - (this._scrollT || now));
-    for (const textbox of this.textboxes || []) {
-      if (textbox.fStory || this.frame !== textbox.nfrmFirst) continue;
-      const target = textbox._maxScroll || 0;
-      if ((textbox._scv || 0) < target) {
-        textbox._scv = Math.min(target, (textbox._scv || 0) + (dt / 1000) * TEXTBOX_SCROLL_PIXELS_PER_SECOND);
-        if (textbox._scv < target) scrollHold = true;
-      }
-    }
-    this._scrollT = now;
-    if (scrollHold) return true;
+    if (this.updateScroll()) return true;
     if (this.wit) { // pause event active — hold the current frame until its condition clears
       const w = this.wit;
       if (w.wit === WIT.UntilClick) {

@@ -52,8 +52,9 @@ src/render/            three.js renderer (renders into #view)
 - **One canvas.** `#ui` (640×480) is the only interactive surface; `#view` is
   the WebGL canvas, blitted by `MovieScreen` (needs `preserveDrawingBuffer`).
   No absolutely-positioned DOM UI except: `#boot` splash, `optModal` settings
-  dialog, `#rotMsg` rotate prompt, and easel `<input>` overlays
-  (`EaselView.overlayElement`, torn down on view pop via `ModalView.onExit`).
+  dialog, and `#rotMsg` rotate prompt. Text entry uses the canvas `TextField`
+  element (widgets.ts — caret/selection/editing modelled on the textbox
+  editor); file pickers are the only remaining `<input>`s.
 - **View stack.** `uiRoot.push(view, 'none'|'fade')`, `uiRoot.pop()`,
   `uiRoot.replace()`. `onEnter`/`onExit` fire on cover/uncover AND push/pop —
   check `uiRoot.stack.includes(this)` to distinguish.
@@ -87,7 +88,8 @@ src/render/            three.js renderer (renders into #view)
 ## URL params
 
 `?3mm=<url>` remote movie · `?mode=theatre|embed` · `?scene= ?frame= ?play`
-· `?packs=a,b` expansion pack paths · `?lang=` dictionary · `?opts=a,b`
+· `?packs=a,b` expansion pack paths · `?vxp=a,b` .vxp expansion URLs (`{a,b}` brace alternates expand; zip —
+fetched once, cached in IDB `mmsvxp`, unzipped into the same routing) · `?lang=` dictionary · `?opts=a,b`
 render flags · `?menu` open settings · `?castid=` CAF receiver app id.
 
 ## Docs
