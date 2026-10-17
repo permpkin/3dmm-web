@@ -9,6 +9,9 @@ export const WIDTH = 544, HEIGHT = 306;
 export const toMatrix4 = (m) => new THREE.Matrix4().set(
   m[0], m[3], m[6], m[9], m[1], m[4], m[7], m[10], m[2], m[5], m[8], m[11], 0, 0, 0, 1);
 
+/** 3DMM 2x3 texture transform -> three.js Matrix3 (identity when absent). */
+const txxf23 = (x) => x ? new THREE.Matrix3().set(x[0], x[2], x[4], x[1], x[3], x[5], 0, 0, 1) : new THREE.Matrix3();
+
 const BG_VS = `out vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 const BG_FS = `precision highp float; in vec2 vUv; uniform sampler2D uIndex, uDepth, uPalette;
 uniform float uSmooth;
@@ -81,15 +84,22 @@ void main(){
   if (uTextured) {
     vec2 t = (uTxxf * vec3(vUv, 1.0)).xy;
     vec3 col;
-    if (uSmooth > 0.5) { // blend colors, not indices
+    if (uSmooth > 0.5) { // blend colors, not indices — index 0 = transparent key
       ivec2 ts = textureSize(uTex, 0);
       vec2 g = fract(t) * vec2(ts) - 0.5, f = fract(g);
       ivec2 i = ivec2(floor(g)), j = i + 1;
       i = (i % ts + ts) % ts; j = (j % ts + ts) % ts; // wrap
-      col = mix(mix(palette(texelFetch(uTex, i, 0).r * 255.0), palette(texelFetch(uTex, ivec2(j.x, i.y), 0).r * 255.0), f.x),
-                mix(palette(texelFetch(uTex, ivec2(i.x, j.y), 0).r * 255.0), palette(texelFetch(uTex, j, 0).r * 255.0), f.x), f.y);
+      vec4 k = vec4(texelFetch(uTex, i, 0).r, texelFetch(uTex, ivec2(j.x, i.y), 0).r,
+                    texelFetch(uTex, ivec2(i.x, j.y), 0).r, texelFetch(uTex, j, 0).r) * 255.0;
+      vec4 w = vec4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y)
+        * step(0.5, k); // drop transparent taps, renormalize over opaque coverage
+      float cov = w.x + w.y + w.z + w.w;
+      if (cov == 0.0) discard;
+      col = (w.x * palette(k.x) + w.y * palette(k.y) + w.z * palette(k.z) + w.w * palette(k.w)) / cov;
     } else {
-      col = palette(texture(uTex, fract(t)).r * 255.0);
+      float k = texture(uTex, fract(t)).r * 255.0;
+      if (k < 0.5) discard; // index 0 = transparent
+      col = palette(k);
     }
     // modern: shade textured parts with the scene lights instead of flat-bright
     float li = 0.0;
@@ -107,9 +117,15 @@ void main(){
 const COPY_FS = `precision highp float; in vec2 vUv; uniform sampler2D uSrc; out vec4 outColor;
 void main(){ outColor = texture(uSrc, vUv); }`;
 // light-space depth pass: writes actor id to color, depth to the depth attachment
-const DEPTH_VS = `void main(){ gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); }`;
-const DEPTH_FS = `precision highp float; uniform float uAid; out vec4 outColor;
-void main(){ outColor = vec4(uAid / 255.0, 0.0, 0.0, 1.0); }`;
+const DEPTH_VS = `out vec2 vUv;
+void main(){ vUv = uv; gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); }`;
+const DEPTH_FS = `precision highp float; in vec2 vUv; uniform float uAid;
+uniform sampler2D uTex; uniform mat3 uTxxf; uniform float uTextured;
+out vec4 outColor;
+void main(){
+  if (uTextured > 0.5 && texture(uTex, fract((uTxxf * vec3(vUv, 1.0)).xy)).r * 255.0 < 0.5) discard; // index 0 = transparent
+  outColor = vec4(uAid / 255.0, 0.0, 0.0, 1.0);
+}`;
 
 // smooth-shaded variant: average face normals across ALL coincident vertices,
 // so lighting is continuous across index seams and UV-split duplicates
@@ -358,11 +374,18 @@ export class Renderer {
     return t;
   }
 
-  /** Depth-pass material stamping occluder id `aid` — per-id so a mesh never
-   *  samples the shadow map it's currently writing. */
-  _depthMat(aid) {
-    let m = this._depthMats.get(aid);
-    if (!m) { m = new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: DEPTH_VS, fragmentShader: DEPTH_FS, uniforms: { uAid: { value: aid } } }); this._depthMats.set(aid, m); }
+  /** Depth-pass material stamping occluder id `aid` — per (id, material) so a
+   *  mesh never samples the shadow map it's currently writing, and textured
+   *  materials can cut out index-0 texels. */
+  _depthMat(aid, mtrl) {
+    const key = `${aid}:${mtrl?.id ?? ''}`;
+    let m = this._depthMats.get(key);
+    if (!m) {
+      m = new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: DEPTH_VS, fragmentShader: DEPTH_FS,
+        uniforms: { uAid: { value: aid }, uTex: { value: mtrl?.tmap ? this._texture(mtrl.tmap) : null },
+          uTxxf: { value: txxf23(mtrl?.txxf) }, uTextured: { value: mtrl?.tmap ? 1 : 0 } } });
+      this._depthMats.set(key, m);
+    }
     return m;
   }
 
@@ -380,8 +403,7 @@ export class Renderer {
     const key = `${mtrl ? mtrl.id : 'default'}@${aid}`;
     let m = this.mats.get(key);
     if (!m) {
-      const x = mtrl?.txxf;
-      const txxf = x ? new THREE.Matrix3().set(x[0], x[2], x[4], x[1], x[3], x[5], 0, 0, 1) : new THREE.Matrix3();
+      const txxf = txxf23(mtrl?.txxf);
       m = new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: ACT_VS, fragmentShader: ACT_FS, side: THREE.DoubleSide,
         uniforms: {
           uPalette: { value: this.palette }, uTex: { value: mtrl?.tmap ? this._texture(mtrl.tmap) : null },
@@ -432,6 +454,7 @@ export class Renderer {
           mesh.geometry = this.opts.smoothVerts ? this._geometrySmooth(part.model) : this._geometry(part.model);
           mesh._aid = aid;
           mesh._actor = actor; // lets pickActor resolve a clicked mesh back to its Actor
+          mesh._partMtrl = part.mtrl; // texture key for the shadow depth pass
           mesh.material = mesh._mainMat = this._material(part.mtrl, aid);
           mesh.matrix.copy(toMatrix4(mats[i]));
           mesh.matrixWorld.copy(mesh.matrix);
@@ -471,7 +494,7 @@ export class Renderer {
         lc.updateProjectionMatrix(); lc.updateMatrixWorld();
         this._lightVP.multiplyMatrices(lc.projectionMatrix, lc.matrixWorldInverse);
         this._selfDir.copy(d).negate();
-        for (let k = 0; k < n; k++) this.meshPool[k].material = this._depthMat(this.meshPool[k]._aid);
+        for (let k = 0; k < n; k++) this.meshPool[k].material = this._depthMat(this.meshPool[k]._aid, this.meshPool[k]._partMtrl);
         gl.setRenderTarget(this.selfRT); gl.clear();
         gl.render(this.scene, lc);
         gl.setRenderTarget(target);

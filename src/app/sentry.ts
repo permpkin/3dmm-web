@@ -9,6 +9,9 @@ if (import.meta.env.VITE_SENTRY_DSN) Sentry.init({
   integrations: [
     Sentry.browserTracingIntegration(),
     Sentry.replayIntegration(),
+    // the whole UI is canvas — without this replays show a blank page;
+    // note canvas pixels are never masked (Sentry can't scrub them)
+    Sentry.replayCanvasIntegration(),
     Sentry.captureConsoleIntegration({ levels: ['error'] }), // console.error -> Sentry event
     // no floating DOM button — the canvas UI's "report a problem" link opens
     // the dialog via telemetry.report(); the sync variant bundles the modal
