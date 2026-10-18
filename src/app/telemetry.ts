@@ -8,6 +8,10 @@ import { useUiState, useEditState, appState } from './appState.ts';
 class Telemetry {
   gaId = import.meta.env.VITE_GA_MEASUREMENT_ID || '';
   sentryOn = !!import.meta.env.VITE_SENTRY_DSN;
+  /** Set by movieDocument — returns the working doc's {bytes, name, scene,
+   *  frame} so error events can carry the movie + position, or null. */
+  movieContext: (() => any) | null = null;
+  _seenErrors = new Set();
 
   /** Inject gtag.js and wire the store subscriptions — called once from main. */
   init = () => {
@@ -51,10 +55,38 @@ class Telemetry {
     (window as any).gtag?.('event', action, data);
   };
 
-  /** Non-fatal error → Sentry exception + GA exception event. */
-  error = (err, context = {}) => {
-    if (this.sentryOn) Sentry.captureException(err, { extra: context });
-    (window as any).gtag?.('event', 'exception', { description: String(err), ...context });
+  /** Non-fatal error → Sentry exception + GA exception event. The working
+   *  movie rides along as a .3mm attachment (+ name/scene/frame in `extra`)
+   *  when one is open; `attach` overrides with caller-supplied bytes (e.g.
+   *  the buffer that failed to open). */
+  error = (err, context: Record<string, any> = {}, attach?: Uint8Array) => {
+    let m: any = null;
+    try { m = this.movieContext?.(); } catch { /* un-serializable doc — report anyway */ }
+    const pos = m ? { movie: m.name, scene: m.scene, frame: m.frame } : {};
+    if (this.sentryOn) {
+      const bytes = attach || m?.bytes;
+      const base = (attach ? context.name : m?.name) || 'movie';
+      Sentry.captureException(err, {
+        captureContext: { extra: { ...context, ...pos } },
+        attachments: bytes ? [{ filename: /\.3mm$/i.test(base) ? base : `${base}.3mm`, data: bytes }] : undefined,
+      });
+    }
+    (window as any).gtag?.('event', 'exception', { description: String(err), ...context, ...pos });
+  };
+
+  /** error() deduped by message — for per-frame failure loops (renderer)
+   *  where the same throw would otherwise flood Sentry/GA. */
+  errorOnce = (err, context: Record<string, any> = {}, attach?: Uint8Array) => {
+    const k = String(err);
+    if (this._seenErrors.has(k)) return;
+    this._seenErrors.add(k);
+    this.error(err, context, attach);
+  };
+
+  /** Sentry-only breadcrumb — for high-frequency chatter that shouldn't
+   *  become a GA event (asset loads, etc.). */
+  crumb = (message, data = {}, category = 'app', level: Sentry.SeverityLevel = 'info') => {
+    if (this.sentryOn) Sentry.addBreadcrumb({ category, message, data, level });
   };
 
   /** Trace span when Sentry is on — the callback always runs. */

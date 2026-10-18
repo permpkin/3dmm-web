@@ -5,6 +5,7 @@ import { movieEdits } from './edit/movieEdits.ts';
 import { textboxEdits } from './edit/textboxEdits.ts';
 import { renderOptions } from './renderOptions.ts';
 import { studioHost } from './ui/studio.ts';
+import { telemetry } from './telemetry.ts';
 
 /** Playback driver — the ~6fps movie clock (FPS), rAF or setInterval depending
  *  on the smooth-playback option, plus the editor overlay update each frame. */
@@ -37,7 +38,7 @@ class PlaybackLoop {
           b: textboxSelection ? Math.max(textboxSelection.anchor, textboxSelection.other) : 0,
           caret: textboxSelection && textboxSelection.anchor === textboxSelection.other && Math.floor((performance.now() - (this._caretT0 || 0)) / 450) % 2 === 0 ? textboxSelection.other : null } // blinking caret on a collapsed sel
       : null;
-    try { sceneRenderer.render(moviePlayer); } catch (e) { console.error('render:', e); }
+    try { sceneRenderer.render(moviePlayer); } catch (e) { console.error('render:', e); telemetry.errorOnce(e, { op: 'render' }); }
     this.syncUi();
   };
 
@@ -54,7 +55,7 @@ class PlaybackLoop {
       this.acc -= frameDur;
     }
     moviePlayer.updateScroll(); // credits scroll runs on its own clock, not per-step
-    try { sceneRenderer.render(moviePlayer, this.acc / frameDur); } catch (e) { console.error('render:', e); }
+    try { sceneRenderer.render(moviePlayer, this.acc / frameDur); } catch (e) { console.error('render:', e); telemetry.errorOnce(e, { op: 'render' }); }
     this.syncUi();
     this.raf = requestAnimationFrame(this._tick);
   };

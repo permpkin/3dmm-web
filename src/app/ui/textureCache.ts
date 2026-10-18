@@ -2,6 +2,7 @@
 // that may still be loading — draw sites call it every frame and it becomes
 // drawable when complete; draw helpers skip incomplete images.
 import { textureUrl } from '../resources.ts';
+import { telemetry } from '../telemetry.ts';
 
 /** Texture-image cache — `image(name)` returns the cached <img> (loading or
  *  ready), `warm(name)` pre-decodes during boot, `isReady(image)` tells draw
@@ -17,6 +18,8 @@ class TextureCache {
       image = new Image();
       image.src = textureUrl(`${name}`);
       image.draggable = false;
+      telemetry.crumb(`load ${name}`, { url: image.src }, 'asset'); // <img> loads bypass fetch, so the default breadcrumbs miss them
+      image.onerror = () => { telemetry.crumb(`texture failed: ${name}`, { url: image.src }, 'asset', 'warning'); telemetry.track('texture_fail', { name }); };
       this.cache.set(name, image);
       if (onload) { const f = () => onload(image); image.complete ? f() : (image.onload = f); }
     } else if (onload && !image.complete) { image.addEventListener('load', () => onload(image), { once: true }); }

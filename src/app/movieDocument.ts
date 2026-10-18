@@ -101,7 +101,7 @@ class MovieDocument {
     try { p = telemetry.span('movie_parse', () => new MoviePlayer(new ChunkyFile(buffer, name), appState.contentLibrary)); }
     catch (e) { // a failed load leaves the old movie open
       toastHost.show(e.message);
-      telemetry.error(e, { op: 'openMovie', name });
+      telemetry.error(e, { op: 'openMovie', name }, new Uint8Array(buffer));
       return false;
     }
     telemetry.track('movie_open', { name, scenes: p.movie.scenes.length, source });
@@ -240,7 +240,7 @@ class MovieDocument {
       }
       toastHost.show(localizer.translate('doc.saved', { name: this.saveFileHandle?.name || name }));
       telemetry.track('movie_save', { name, saveAs, bytes: bytes.length, via });
-    } catch (e) { if (e.name !== 'AbortError') { toastHost.show(localizer.translate('doc.saveFailed', { err: e.message })); telemetry.error(e, { op: 'saveMovie' }); } }
+    } catch (e) { if (e.name !== 'AbortError') { toastHost.show(localizer.translate('doc.saveFailed', { err: e.message })); telemetry.error(e, { op: 'saveMovie', name }, bytes); } }
   });
 
   /** Open a movie by URL — bare names resolve under movies/ (the ?3mm=
@@ -274,3 +274,7 @@ class MovieDocument {
 
 export const movieDocument = new MovieDocument();
 movieDocument.installAutosaveHooks();
+// error events carry the working doc as a .3mm attachment + position extra
+telemetry.movieContext = () => appState.moviePlayer
+  ? { bytes: movieDocument.movieBytes(), name: appState.moviePlayer.movie.name, scene: appState.moviePlayer.sceneIndex, frame: appState.moviePlayer.frame }
+  : null;

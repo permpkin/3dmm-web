@@ -100,7 +100,7 @@ if (!bootComplete) {
   const doc = await movieDocument.documentDatabase.get(), pos = movieDocument.savedPlaybackPosition(); // pos first — movieDocument.openMovie()'s loadScene(0) overwrites it
   if (doc?.bytes?.length) {
     try { bootComplete = movieDocument.openMovie(doc.bytes, doc.name || 'autosave.3mm', true, 'autosave'); } // open() catches only the
-    catch (e) { console.warn('[autosave] restore threw:', e); }  // ctor — guard the rest too
+    catch (e) { console.warn('[autosave] restore threw:', e); telemetry.error(e, { op: 'autosave_restore' }, doc.bytes); }  // ctor — guard the rest too
     if (bootComplete) { // return to the last scene+frame seen — the fresher of pos (nav) vs doc rec (flush)
       const rec = (pos?.t ?? 0) >= (doc.t ?? 0) ? pos : doc; // scene+frame stay consistent per source
       if (rec?.scene >= 0) appState.moviePlayer.loadScene(Math.min(rec.scene, appState.moviePlayer.movie.scenes.length - 1));

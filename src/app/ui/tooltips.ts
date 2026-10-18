@@ -3,6 +3,7 @@ import { baseUrl } from '../resources.ts';
 import { uiRoot, UI_WIDTH, UI_HEIGHT } from './root.ts';
 import { Element } from './element.ts';
 import { localizer } from '../localization.ts';
+import { telemetry } from '../telemetry.ts';
 // Dwell tooltips — callout balloons drawn from 9-slice skins (cobllnN.png)
 // with the red arrow baked in; the skin's reg point is the arrow tip. Hovering
 // a control ~1.2s shows its tip (suppressed while playing). ------------
@@ -26,8 +27,8 @@ const calloutImages: Record<number, HTMLImageElement> = {};
 for (const n of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
   const image = new Image(); image.src = baseUrl + 'textures/coblln' + n + '.png'; calloutImages[n] = image;
 }
-const calloutImagesReady = Promise.all(Object.values(calloutImages).map((image) =>
-  image.complete ? 0 : new Promise((r) => { image.onload = image.onerror = r; })));
+const calloutImagesReady = Promise.all(Object.entries(calloutImages).map(([n, image]: [string, HTMLImageElement]) =>
+  image.complete ? 0 : new Promise((r) => { image.onload = r; image.onerror = () => { telemetry.crumb(`callout skin failed: coblln${n}`, { url: image.src }, 'asset', 'warning'); r(0); }; })));
 /** Stretch a 9-slice tile row to length D — the row is [cap-len, flex-len,
  *  flex-min, mid-len, flex2-len, flex2-min, cap-len]; returns
  *  [srcOff,srcLen,dstOff,dstLen][] segments to blit. */
