@@ -92,19 +92,19 @@ class MovieDocument {
    *  sound/transition callbacks, restores editor state, and marks the doc
    *  dirty. Prompts before discarding unsaved edits; returns false on cancel
    *  or parse failure (the old movie stays open). */
-  openMovie = (buffer, name, cacheDoc = true) => {
+  openMovie = (buffer, name, cacheDoc = true, source = 'open') => {
     playbackLoop.setPlaying(false);
     appState.soundQueue.stopAll();
     // keep-changes check: unsaved ops prompt before replacing the doc
     if (appState.moviePlayer && (editHistory.undos.length || editHistory.redos.length) && !confirm(localizer.translate('doc.discard'))) return false;
     let p;
-    try { p = new MoviePlayer(new ChunkyFile(buffer, name), appState.contentLibrary); }
+    try { p = telemetry.span('movie_parse', () => new MoviePlayer(new ChunkyFile(buffer, name), appState.contentLibrary)); }
     catch (e) { // a failed load leaves the old movie open
       toastHost.show(e.message);
       telemetry.error(e, { op: 'openMovie', name });
       return false;
     }
-    telemetry.track('movie_open', { name, scenes: p.movie.scenes.length });
+    telemetry.track('movie_open', { name, scenes: p.movie.scenes.length, source });
     appState.setMoviePlayer(p);
     this.saveFileHandle = null;
     window.moviePlayer = appState.moviePlayer; window.soundQueue = appState.soundQueue; window.sceneRenderer = appState.sceneRenderer;
@@ -148,7 +148,7 @@ class MovieDocument {
 
   /** New document — a sceneless movie; the guide tip follows on boot or New. */
   newMovie = () => {
-    this.openMovie(serializeMovie({ name: localizer.translate('doc.untitled'), scenes: [] }), localizer.translate('doc.untitled') + '.3mm'); // idsEngineDefaultTitle
+    this.openMovie(serializeMovie({ name: localizer.translate('doc.untitled'), scenes: [] }), localizer.translate('doc.untitled') + '.3mm', true, 'new'); // idsEngineDefaultTitle
     setTimeout(tooltips.showGuideTip, 450); // a sceneless doc gets the guide tip
   };
 
@@ -207,7 +207,7 @@ class MovieDocument {
   openMovieFile = () => {
     const inp = document.createElement('input');
     inp.type = 'file';
-    inp.onchange = async () => { const f = inp.files[0]; if (f) await this._busy(async () => this.openMovie(await f.arrayBuffer(), f.name)); };
+    inp.onchange = async () => { const f = inp.files[0]; if (f) await this._busy(async () => this.openMovie(await f.arrayBuffer(), f.name, true, 'file')); };
     inp.click();
   };
 
@@ -218,24 +218,28 @@ class MovieDocument {
    *  else the save-file picker, else a download fallback. */
   saveMovie = async (saveAs = false) => this._busy(async () => {
     const name = `${appState.moviePlayer.movie.name || localizer.translate('doc.untitled')}.3mm`;
+    const bytes = telemetry.span('movie_serialize', () => this.movieBytes());
+    let via = 'handle';
     try {
       if (!saveAs && this.saveFileHandle) {
         const ws = await this.saveFileHandle.createWritable();
-        await ws.write(this.movieBytes()); await ws.close();
+        await ws.write(bytes); await ws.close();
       } else if (window.showSaveFilePicker) {
+        via = 'picker';
         this.saveFileHandle = await showSaveFilePicker({ suggestedName: name,
           types: [{ description: '3D Movie Maker movie', accept: { 'application/octet-stream': ['.3mm'] } }] });
         const ws = await this.saveFileHandle.createWritable();
-        await ws.write(this.movieBytes()); await ws.close();
+        await ws.write(bytes); await ws.close();
       } else { // no file-system access — download is the browser's save dialog
+        via = 'download';
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([this.movieBytes()]));
+        a.href = URL.createObjectURL(new Blob([bytes]));
         a.download = name; a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 5000);
         this.saveFileHandle = null;
       }
       toastHost.show(localizer.translate('doc.saved', { name: this.saveFileHandle?.name || name }));
-      telemetry.track('movie_save', { name, saveAs });
+      telemetry.track('movie_save', { name, saveAs, bytes: bytes.length, via });
     } catch (e) { if (e.name !== 'AbortError') { toastHost.show(localizer.translate('doc.saveFailed', { err: e.message })); telemetry.error(e, { op: 'saveMovie' }); } }
   });
 
@@ -243,24 +247,27 @@ class MovieDocument {
    *  param), full URLs fetch as-is. Returns null on success, else a friendly
    *  error string for the open-failed dialog. */
   openMovieUrl = async (urlOrName, cacheDoc = true) => this._busy(async () => {
+    // every early return lands here — one event per attempt, reason-coded
+    const fail = (reason, msg) => { telemetry.track('movie_open_url', { ok: false, reason }); return msg; };
     let url;
     try { url = /^[\w.-]+$/.test(urlOrName) ? `${baseUrl}movies/${urlOrName}` : new URL(urlOrName, location.href).href; }
-    catch { return `that doesn't look like a movie link`; }
+    catch { return fail('bad_url', `that doesn't look like a movie link`); }
     let buf;
     try {
       const res = await fetch(url);
-      if (res.status === 404) return `couldn't find that movie — the link may have moved or been deleted`;
-      if (!res.ok) return `the movie link didn't work (server said ${res.status})`;
+      if (res.status === 404) return fail('not_found', `couldn't find that movie — the link may have moved or been deleted`);
+      if (!res.ok) return fail('http', `the movie link didn't work (server said ${res.status})`);
       const ct = res.headers.get('content-type') || '';
       buf = await res.arrayBuffer();
       // SPA fallback serves index.html for missing files — same thing as a 404
-      if (ct.includes('text/html')) return `couldn't find that movie — the link may have moved or been deleted`;
-    } catch { return `couldn't reach that movie — check the link and your connection`; }
+      if (ct.includes('text/html')) return fail('not_found', `couldn't find that movie — the link may have moved or been deleted`);
+    } catch { return fail('unreachable', `couldn't reach that movie — check the link and your connection`); }
     const magic = buf.byteLength >= 4 ? String.fromCharCode(...new Uint8Array(buf, 0, 4)) : '';
-    if (magic !== 'CHN2' && magic !== '2NHC') return `that file isn't a 3D Movie Maker movie`;
+    if (magic !== 'CHN2' && magic !== '2NHC') return fail('not_chunky', `that file isn't a 3D Movie Maker movie`);
     const name = decodeURIComponent(new URL(url, location.href).pathname.split('/').pop()) || 'movie.3mm';
-    const ok = this.openMovie(buf, name, cacheDoc);
+    const ok = this.openMovie(buf, name, cacheDoc, 'url');
     if (ok) this.lastMovieUrl = url;
+    telemetry.track('movie_open_url', { ok, host: new URL(url, location.href).hostname });
     return ok ? null : `couldn't load that movie`;
   });
 }

@@ -3,6 +3,7 @@ import { decodeWavAdpcm } from '../format/wav.ts';
 import { parseMsnd, STY } from '../format/content.ts';
 import { appState } from './appState.ts';
 import { AssetBrowserView } from './ui/assetBrowser.ts';
+import { telemetry } from './telemetry.ts';
 
 /** IndexedDB wrapper for user-imported/recorded sounds (survives reloads). */
 class UserSoundDatabase {
@@ -138,6 +139,7 @@ class SoundSources {
       const midi = /\.(mid|midi|rmi)$/i.test(file.name);
       cands.push({ name: file.name.replace(/\.[^.]+$/, ''), bytes: u8, mime: file.type || 'audio/*', midi });
     }
+    telemetry.track('sound_import', { kind, sounds: cands.length });
     if (cands.length) AssetBrowserView.show(kind, cands);
     else console.warn(`[import] no sounds found in ${file.name}`);
   };

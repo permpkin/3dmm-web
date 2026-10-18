@@ -23,6 +23,25 @@ class Telemetry {
       w.gtag('config', this.gaId);
     }
     this._wireStores();
+    this._trackUrlParams();
+  };
+
+  /** Report which URL params drove this session — param names and small safe
+   *  values only (never URLs or file names). Also stashed as a Sentry context
+   *  so every error event shows the params that were in play. */
+  _trackUrlParams = () => {
+    if (typeof location === 'undefined') return;
+    const KNOWN = ['3mm', 'mode', 'scene', 'frame', 'play', 'opts', 'renderOptions', 'menu', 'packs', 'vxp', 'lang', 'sf', 'castid'];
+    const q = new URLSearchParams(location.search);
+    const used = KNOWN.filter((k) => q.has(k)), unknown = [...new Set(q.keys())].filter((k) => !KNOWN.includes(k));
+    if (!used.length && !unknown.length) return;
+    const specs = (v) => { let d = 0, n = 1; for (const c of v) { if (c === '{') d++; else if (c === '}') d = Math.max(0, d - 1); else if (c === ',' && !d) n++; } return n; }; // top-level count, brace alternates excluded
+    const data: Record<string, any> = { params: used.join(',') };
+    if (unknown.length) data.params_unknown = unknown.length;
+    for (const k of ['mode', 'lang', 'scene', 'frame']) if (q.has(k)) data[k] = q.get(k);
+    for (const k of ['packs', 'vxp']) if (q.has(k)) data[k] = specs(q.get(k));
+    if (this.sentryOn) Sentry.setContext('url_params', data);
+    this.track('url_params', data);
   };
 
   /** Named event → Sentry breadcrumb + GA4 event. Use snake_case — GA4
@@ -61,7 +80,12 @@ class Telemetry {
    *  which call site triggered it. */
   _wireStores = () => {
     useUiState.subscribe((s, p) => {
-      if (s.playing !== p.playing) this.track(s.playing ? 'playback_play' : 'playback_stop');
+      if (s.playing !== p.playing) {
+        const mp = appState.moviePlayer;
+        // last frame of the last scene = the movie ran out, not a user pause
+        const ended = !s.playing && mp?.movie && mp.sceneIndex === mp.movie.scenes.length - 1 && mp.frame >= mp.scene?.nfrmLast;
+        this.track(s.playing ? 'playback_play' : ended ? 'playback_end' : 'playback_pause', { scene: mp?.sceneIndex });
+      }
       if (s.topView !== p.topView && s.topView) this.track('ui_view', { view: (s.topView as any).constructor.name });
     });
     useEditState.subscribe((s, p) => {

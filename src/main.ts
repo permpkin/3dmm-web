@@ -82,7 +82,8 @@ document.addEventListener('keydown', (e) => { // Space = play/pause in theatre/e
 
 // --- URL params: render options, menu, movie source, theatre/embed ------------
 const queryParams = new URLSearchParams(location.search);
-if (queryParams.get('renderOptions')) { for (const k of queryParams.get('renderOptions').split(',')) if (typeof renderOptions[k] === 'boolean') renderOptions[k] = true; appState.sceneRenderer.setOpts(renderOptions); }
+const optsParam = queryParams.get('opts') ?? queryParams.get('renderOptions'); // 'opts' is the documented name; renderOptions is the legacy alias
+if (optsParam) { for (const k of optsParam.split(',')) if (typeof renderOptions[k] === 'boolean') renderOptions[k] = true; appState.sceneRenderer.setOpts(renderOptions); }
 if (queryParams.has('menu')) setTimeout(OptionsEasel.show, 600);
 // Startup: the autosaved working doc opens straight into the studio; no doc
 // means a blank movie. ?3mm=url loads a remote movie, replacing the working doc
@@ -91,15 +92,14 @@ if (queryParams.has('menu')) setTimeout(OptionsEasel.show, 600);
 let bootComplete = false, bootError = null;
 const remoteMovie = queryParams.get('3mm');
 if (remoteMovie) {
-  bootError = await movieDocument.openMovieUrl(remoteMovie); // a loaded remote movie becomes the working doc
+  bootError = await movieDocument.openMovieUrl(remoteMovie); // a loaded remote movie becomes the working doc (tracks movie_open_url itself)
   bootComplete = !bootError;
-  telemetry.track('movie_open_url', { ok: bootComplete });
   if (bootError) telemetry.error(new Error(bootError), { op: 'openMovieUrl' });
 }
 if (!bootComplete) {
   const doc = await movieDocument.documentDatabase.get(), pos = movieDocument.savedPlaybackPosition(); // pos first — movieDocument.openMovie()'s loadScene(0) overwrites it
   if (doc?.bytes?.length) {
-    try { bootComplete = movieDocument.openMovie(doc.bytes, doc.name || 'autosave.3mm'); } // open() catches only the
+    try { bootComplete = movieDocument.openMovie(doc.bytes, doc.name || 'autosave.3mm', true, 'autosave'); } // open() catches only the
     catch (e) { console.warn('[autosave] restore threw:', e); }  // ctor — guard the rest too
     if (bootComplete) { // return to the last scene+frame seen — the fresher of pos (nav) vs doc rec (flush)
       const rec = (pos?.t ?? 0) >= (doc.t ?? 0) ? pos : doc; // scene+frame stay consistent per source
