@@ -80,7 +80,7 @@ export class NamePlate extends Element {
   draw(ctx) {
     const image = textureCache.image(`e4audit${this.pressed ? 'c' : ''}`, () => this.dirty());
     if (textureCache.isReady(image)) ctx.drawImage(image, 0, 0, this.w, this.h);
-    ctx.fillStyle = '#222'; ctx.font = "bold 9px 'Comic Sans MS', cursive, sans-serif";
+    ctx.fillStyle = '#222'; ctx.font = "bold 9px 'Comic Neue', cursive, sans-serif";
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(this.label, this.w / 2, this.h / 2, this.w - 6);
   }
