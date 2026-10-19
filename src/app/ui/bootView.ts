@@ -48,7 +48,7 @@ class BootView extends View {
         ctx.strokeStyle = '#555'; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1); // sunken bevel: dark top/left...
         ctx.strokeStyle = '#d8d8d8'; ctx.beginPath(); ctx.moveTo(bx + bw - 0.5, by + 0.5); ctx.lineTo(bx + bw - 0.5, by + bh - 0.5); ctx.lineTo(bx + 0.5, by + bh - 0.5); ctx.stroke(); // ...light bottom/right
         if (r.caption) {
-          ctx.fillStyle = '#666'; ctx.font = "bold 13px 'Comic Sans MS', cursive, sans-serif";
+          ctx.fillStyle = '#666'; ctx.font = "bold 13px 'Comic Neue', cursive, sans-serif";
           ctx.textAlign = 'center'; ctx.fillText(r.caption, UI_WIDTH / 2, by + bh + 22);
         }
       }
