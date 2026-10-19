@@ -19,7 +19,7 @@ import { telemetry } from '../telemetry.ts';
 import { version } from '../../../package.json';
 
 const PW = 380, ROW_H = 19, CAT_H = 15;
-const TABS = ['graphics', 'addons', 'about'];
+const TABS = ['addons', 'graphics', 'about'];
 const REPO = 'https://github.com/permpkin/3dmm-web';
 
 /** opt.* label key — selfShadowOp's string lives under 'shadowOpacity'. */
@@ -324,9 +324,9 @@ class Divider extends Element {
 export class OptionsEasel extends EaselView {
   /** Open the settings — `tab` picks the initial page (re-openers land back
    *  on 'addons' after import/gate flows). */
-  static show = (tab = 'graphics') => modalSlot.open(new OptionsEasel(tab));
+  static show = (tab = 'addons') => modalSlot.open(new OptionsEasel(tab));
   /** Build the plate, tab chips, and the three content groups. */
-  constructor(tab = 'graphics') {
+  constructor(tab = 'addons') {
     super();
     // graphics rows counted first — the panel height follows the largest tab
     const rows = [];
