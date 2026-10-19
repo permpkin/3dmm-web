@@ -636,7 +636,7 @@ export class StudioView extends View {
     // canvas TextField over the slot
     const nameEl = namedElements.stname;
     nameEl.pickable = true; nameEl.cursor = CURSORS.ibeam;
-    const nameField = new TextField(30, 464, 296, 16);
+    const nameField = new TextField(30, 465, 296, 16);
     nameField.bevel = false; nameField.bg = '#cfe8ff'; nameField.padX = 3;
     nameField.font = "bold 13px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif";
     nameField.maxLength = 64; nameField.visible = false; nameField.commitOnBlur = true;
