@@ -45,12 +45,15 @@ class BrowserCell extends Element {
   }
   /** The item this cell currently shows — page + grid slot into the list. */
   item() { return this.view.items[this.view.pageIndex * this.view.itemsPerPage + this.cellIndex]; }
+  /** Empty slots are inert like the original's kstBrowserInvisible — the book
+   *  page shows through and clicks/cursors fall to the background. */
+  hitTest(px, py) { return this.item() ? super.hitTest(px, py) : null; }
   /** Paint the frame + the item's thumbnail, or the scene/sound label. */
   draw(ctx) {
     const item = this.item();
+    if (!item) return;
     const frameImage = textureCache.image(`${this.def.cellFrameSkin}${this.selected || this.hover ? 'h' : ''}`, () => this.dirty());
     if (textureCache.isReady(frameImage)) { ctx.imageSmoothingEnabled = false; ctx.drawImage(frameImage, 0, 0, this.w, this.h); }
-    if (!item) return;
     const cw = this.w - 8, ch = this.h - 8;
     ctx.save(); ctx.translate(4, 4);
     if (item.mbmp) ctx.drawImage(thumbnails.mbmpToCanvas(item.mbmp, cw, ch), 0, 0);
