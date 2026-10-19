@@ -187,7 +187,7 @@ class TooltipManager {
   showGuideTip = () => {
     const b = { x: 18, y: 1, w: 62, h: 40 }; // 1back insert button rect (logical)
     calloutImagesReady.then(() => { if (this.element || appState.moviePlayer?.movie.scenes.length) return;
-      this.element = this.showCallout(b, [['To see the scenes you can choose from, click '], ['Scene Choices', 1], ['.']], true);
+      this.element = this.showCallout(b, [['Pick a Scene\n', 't'], ['To see the scenes you can choose from']], true);
       if (this.element) this.source = b;
       setTimeout(() => { if (this.element?.sticky) this.dismiss(); }, 15000); });
   };
