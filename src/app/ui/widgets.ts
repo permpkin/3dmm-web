@@ -62,7 +62,7 @@ export class TextLink extends Element {
   /** Paint the link text + hover underline. */
   draw(ctx) {
     ctx.fillStyle = this.color;
-    ctx.font = `bold ${this.size}px 'Comic Neue', cursive, sans-serif`;
+    ctx.font = `bold ${this.size}px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = this.align; ctx.textBaseline = 'middle';
     const tx = this.align === 'center' ? this.w / 2 : this.align === 'right' ? this.w : 0;
     ctx.fillText(this.text, tx, this.h / 2);
@@ -184,7 +184,7 @@ export class TextElement extends Element {
   draw(ctx) {
     if (!this.text) return;
     ctx.fillStyle = this.color;
-    ctx.font = `${this.bold ? 'bold ' : ''}${this.size}px ${this.font || `'Comic Neue', cursive, sans-serif`}`;
+    ctx.font = `${this.bold ? 'bold ' : ''}${this.size}px ${this.font || `'Comic Sans MS', 'Comic Neue', cursive, sans-serif`}`;
     ctx.textAlign = this.align; ctx.textBaseline = 'middle';
     const tx = this.align === 'center' ? this.w / 2 : this.align === 'right' ? this.w : 0;
     const lines = String(this.text).split('\n');
@@ -295,7 +295,7 @@ export class TextField extends Element {
   onCancel = null;     // () — when set, Escape is consumed and fires this; unset
                        // Escape just blurs and falls through to the modal Esc route
   commitOnBlur = false;// outside-click commits (movie-name style) vs just blurs
-  font = "bold 19px 'Comic Neue', cursive, sans-serif";
+  font = "bold 19px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif";
   fg = '#222';
   bg = '#fff8dc';
   bevel = true;    // inset border, like the old 2px-inset DOM fields

@@ -23,7 +23,7 @@ export class TextboxEdits {
   /** Style picks — {style-bit mask, resulting grfont}. */
   TYTH_STYLES = [{ mask: 3, grfont: 0 }, { mask: 3, grfont: 1 }, { mask: 3, grfont: 2 }, { mask: 3, grfont: 3 }];
   /** Font families offered by the font picker. */
-  TB_FONTS = ['Comic Sans MS', 'Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Trebuchet MS', 'Impact'];
+  TB_FONTS = ['Comic Sans MS', 'Comic Neue', 'Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Trebuchet MS', 'Impact'];
   /** Tool names that operate on textboxes. */
   TEXTBOX_TOOLS = { textboxSelect: 1, textboxPaintText: 1, textboxFill: 1, textboxFont: 1, textboxSize: 1, textboxStyle: 1, textboxStory: 1, textboxCredit: 1 };
   /** The subset that revert to 'textboxSelect' when the text changes. */

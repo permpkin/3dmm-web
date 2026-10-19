@@ -62,7 +62,7 @@ const tooltipLayer = () => uiRoot.tips;
 /** Run-class styles — 't' is the bold title (larger), 'hot'/1 the link-blue runs. */
 const RUN_STYLE = { 't': { bold: true, color: '#1a1a1a', size: 13 }, 'hot': { bold: false, color: '#1332be' }, 1: { bold: false, color: '#1332be' } };
 /** Tip font for a run. */
-const TIP_FONT = (r) => `${r.bold ? 'bold ' : ''}${r.size || 10}px 'Comic Neue', cursive, sans-serif`;
+const TIP_FONT = (r) => `${r.bold ? 'bold ' : ''}${r.size || 10}px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
 /** Title->body line pitch — also the text inset inside the balloon skin, so
  *  the padding around the text matches the title/body gap. */
 const TIP_GAP = 9;

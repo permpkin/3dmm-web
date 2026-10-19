@@ -133,8 +133,9 @@ function resolvePaps(doc) {
   };
 }
 
-/** Canvas font string for a resolved style — italic/bold flags + size + family. */
-const fontKey = (s) => `${s.grfont & 2 ? 'italic ' : ''}${s.grfont & 1 ? 'bold ' : ''}${s.dyp}px ${JSON.stringify(s.font)}, sans-serif`;
+/** Canvas font string for a resolved style — italic/bold flags + size + family
+ *  (Comic Neue webfont as the family fallback before generic sans). */
+const fontKey = (s) => `${s.grfont & 2 ? 'italic ' : ''}${s.grfont & 1 ? 'bold ' : ''}${s.dyp}px ${JSON.stringify(s.font)}, 'Comic Neue', sans-serif`;
 
 /** Lay a document out into lines of styled runs within its wrap width.
  *  Cached on the doc — invalidated when wrap width or palette changes. */

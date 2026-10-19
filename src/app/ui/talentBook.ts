@@ -61,14 +61,14 @@ class BioText extends TextElement {
     if (actorIndex == null) return;
     const name = thumbnails.browserTemplates.actor[actorIndex]?.name || 'actor';
     ctx.fillStyle = '#222'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.font = "bold 12px 'Comic Neue', cursive, sans-serif";
+    ctx.font = "bold 12px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif";
     ctx.fillText(name, 0, 0, 207);
     // The shipped RTXT help topic here was an unfinished "text to come"
     // placeholder on every page, so we show the actor's name + our one-line
     // blurb, word-wrapped to the column.
     const blurb = TALENT_BOOK_BLURBS[this.page.pageIndex];
     if (blurb) {
-      ctx.font = "11px 'Comic Neue', cursive, sans-serif";
+      ctx.font = "11px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif";
       const words = `${name} ${blurb}`.split(' ');
       let line = '', ly = 26;
       for (const w of words) {

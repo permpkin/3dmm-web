@@ -69,7 +69,7 @@ class SorterCell extends Element {
     ctx.drawImage(easel.thumbCv(item.scene), 8, 12, 143, 80);
     if (easel._editItem !== item) { // the name strip — the editor field covers it while renaming
       const nm = (item.name || '').trim();
-      ctx.font = `11px 'Comic Neue', cursive, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `11px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = nm ? '#dcdce0' : '#7a7a80';
       ctx.fillText(nm || localizer.translate('sort.unnamed', { n: easel.topIndex + this.i + 1 }), 79, 109, 137);
     }
@@ -128,7 +128,7 @@ export class SorterEasel extends EaselView {
     this._editItem = null;
     const nf = this.nameField = new TextField(0, 0, 143, 20);
     nf.visible = false; nf.commitOnBlur = true; nf.maxLength = 64;
-    nf.font = `11px 'Comic Neue', cursive, sans-serif`;
+    nf.font = `11px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
     nf.onCommit = (v) => { const it = this._editItem; this._editItem = null; nf.visible = false; if (it) it.name = v.trim(); nf.blur(false); this.sync(); };
     nf.onCancel = () => { this._editItem = null; nf.visible = false; nf.blur(false); this.sync(); };
     this.add(nf);
@@ -154,7 +154,7 @@ export class SorterEasel extends EaselView {
         if (rendered) x.drawImage(rendered, 0, 0);
         else {
           x.fillStyle = '#111'; x.fillRect(0, 0, 143, 80); x.fillStyle = '#ccc';
-          x.font = '12px "Comic Neue", cursive'; x.textAlign = 'center'; x.textBaseline = 'middle';
+          x.font = '12px "Comic Sans MS", "Comic Neue", cursive'; x.textAlign = 'center'; x.textBaseline = 'middle';
           x.fillText((scene.name || 'scene').slice(0, 20), 71, 40);
         }
       }
@@ -753,7 +753,7 @@ class ActionCell extends FramedCell {
   }
   /** Paint the action's name centered in the cell. */
   drawInner(ctx) {
-    ctx.fillStyle = '#222'; ctx.font = "10px 'Comic Neue', cursive, sans-serif";
+    ctx.fillStyle = '#222'; ctx.font = "10px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif";
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(this.item.name, this.w / 2, this.h / 2, this.w - 8);
   }
