@@ -35,6 +35,19 @@ class VxpCache {
     const db = await this.open(); if (!db) return;
     db.transaction('vxps', 'readwrite').objectStore('vxps').put({ bytes }, url);
   }
+  /** Drop the whole archive cache — the open connection must close first or
+   *  the delete stays blocked. Resolves once the delete finishes (false when
+   *  blocked/erroring) so callers can safely reload right after. */
+  clear() {
+    try { this._db?.close(); } catch { /* already closed */ }
+    this._db = null;
+    return new Promise((res) => {
+      let rq;
+      try { rq = indexedDB.deleteDatabase('mmsvxp'); } catch { res(false); return; }
+      rq.onsuccess = () => res(true);
+      rq.onerror = rq.onblocked = () => res(false);
+    });
+  }
 }
 const vxpCache = new VxpCache();
 
@@ -159,6 +172,7 @@ class ExpansionPacks {
         bytes = await r.arrayBuffer();
         vxpCache.put(url, bytes);
       }
+      entry.bytes = bytes.byteLength; // packed archive size for the addons detail view
       sub?.(0.9);
       return Object.entries(unzipSync(new Uint8Array(bytes))).map(([path, b]: [string, any]) => ({ base: decodeURIComponent(path.split('/').pop()), bytes: b }));
     }
@@ -167,8 +181,10 @@ class ExpansionPacks {
       const r = await fetch(url);
       if (!r.ok) throw new Error(`${r.status}`);
       sub?.(0.9);
+      const buf = await r.arrayBuffer();
+      entry.bytes = buf.byteLength;
       const base = decodeURIComponent((entry.spec.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop()) || 'file');
-      return [{ base, bytes: new Uint8Array(await r.arrayBuffer()) }];
+      return [{ base, bytes: new Uint8Array(buf) }];
     }
     // pack: spec → assets.json url → fetch the manifest then every listed file
     const url = /\.json([?#]|$)/i.test(entry.spec) ? entry.spec : `${entry.spec.replace(/\/*$/, '/')}assets.json`;
@@ -188,14 +204,46 @@ class ExpansionPacks {
       finally { sub?.(++got / files.length); }
     }));
     if (items.includes(null)) this.packNotes.push(localizer.translate('pack.loaded', { name: this._specName(entry.spec), loaded: items.filter(Boolean).length, total: files.length })); // partial — surface it
+    entry.bytes = items.reduce((n, it) => n + (it?.bytes?.length || 0), 0); // no packed size for manifests — sum the files
     return items;
   };
 
   // --- apply / unapply ---------------------------------------------------------
+  /** Parse a v3dmm .cfg descriptor — `extInfo` carries the mod's display
+   *  name, `Desc`/`Description` its detail text, `Version`/`Ver` its
+   *  version; generated packs' plain `Name=` works as a fallback. */
+  _readCfg = (bytes) => {
+    const txt = new TextDecoder().decode(bytes);
+    const kv = (k) => txt.match(new RegExp(`^\\s*${k}\\s*=\\s*"?(.*?)"?\\s*$`, 'im'))?.[1];
+    return { name: kv('extInfo') || kv('Name'), desc: kv('Desc') || kv('Description'), ver: kv('Version') || kv('Ver') };
+  };
+
+  /** Fetch a disabled archive just for its descriptor — the addons list
+   *  shows name/desc/size without applying anything, and the zip lands in
+   *  the IDB cache so enabling later doesn't re-download. */
+  _peek = async (entry) => {
+    const url = new URL(entry.spec, location.href).href;
+    let bytes: any = await vxpCache.get(url);
+    if (!bytes) {
+      const r = await fetch(url);
+      if (!r.ok) return; // best-effort — a failed peek leaves the spec-derived name
+      bytes = await r.arrayBuffer();
+      vxpCache.put(url, bytes);
+    }
+    entry.bytes = bytes.byteLength;
+    for (const [path, b] of Object.entries(unzipSync(new Uint8Array(bytes)))) {
+      if ((path.split('.').pop() || '').toLowerCase() !== 'cfg') continue;
+      const { name, desc, ver } = this._readCfg(b);
+      if (name) entry.name = name;
+      if (desc) entry.desc = desc;
+      if (ver) entry.ver = ver;
+    }
+  };
+
   /** Route an addon's files by extension and record the contributions —
    *  chunky files into the content library (+ .3th scans), png/cur into
-   *  texture overrides. `.cfg` is the v3dmm mod descriptor — parsed only for
-   *  a display name. */
+   *  texture overrides. `.cfg` is the v3dmm mod descriptor — consumed for its
+   *  `extInfo` display name, contributes nothing else. */
   _apply = (addon, sub?) => {
     const rec = { cfs: [], ths: [], scans: [], tex: new Map(), skipped: [] };
     let packPal = null, loaded = 0, n = 0;
@@ -216,6 +264,12 @@ class ExpansionPacks {
         } else rec.ths.push(chunkyFile);
       } else if (ext === 'png' || ext === 'cur') {
         rec.tex.set(it.base, it.bytes);
+      } else if (ext === 'cfg') {
+        const { name, desc, ver } = this._readCfg(it.bytes);
+        if (name) addon.name = name;
+        if (desc) addon.desc = desc;
+        if (ver) addon.ver = ver;
+        continue; // consumed as metadata — not a skipped file
       } else { rec.skipped.push(it.base); continue; }
       loaded++;
     }
@@ -223,6 +277,7 @@ class ExpansionPacks {
     rec.ths.forEach((th, i) => { rec.scans.push(thumbnails.scanThumbnailFile(th, packPal)); sub?.(wApply + (i + 1) / rec.ths.length * wScan); });
     for (const [name, bytes] of rec.tex) packTextures.set(name, URL.createObjectURL(new Blob([bytes])));
     addon.contrib = rec;
+    addon._cfs = rec.cfs; // survives _unapply so dependencies() still answers for disabled addons
     addon.loaded = loaded;
     addon.skipped = rec.skipped;
     sub?.(1);
@@ -258,13 +313,19 @@ class ExpansionPacks {
     let done = 0;
     const cap = () => localizer.translate('boot.pack');
     // all enabled entries fetch in parallel — failures resolve to the error
-    // (fetch covers ~80% of an entry's segment; its _apply finishes the rest)
-    const pending = entries.map((e) => e.enabled === false ? null
-      : this._fetchItems(e, (f) => tick?.((done + f * 0.8) / total, cap())).catch((err) => err));
+    // (fetch covers ~80% of an entry's segment; its _apply finishes the rest);
+    // disabled bundled archives only peek at their .cfg for name/desc/size
+    const pending = entries.map((e) => {
+      if (e.enabled === false)
+        return e.source === 'bundled' && e.type === 'vxp'
+          ? this._peek(e).catch(() => undefined)
+          : null;
+      return this._fetchItems(e, (f) => tick?.((done + f * 0.8) / total, cap())).catch((err) => err);
+    });
     for (const [i, e] of entries.entries()) {
+      const res = pending[i] && await pending[i]; // before the addon — a peeked name/desc must land on it
       const addon = { ...e, name: e.name || this._specName(e.spec), enabled: e.enabled !== false, failed: false };
       this.addons.push(addon);
-      const res = pending[i] && await pending[i];
       if (res instanceof Error) {
         addon.failed = true;
         console.warn(`addon ${e.spec}:`, res);
@@ -288,16 +349,23 @@ class ExpansionPacks {
 
   // --- runtime management ------------------------------------------------------
   /** Enable/disable an addon — disable reverses its contributions; enable
-   *  re-applies (fetching lazily when the items were never loaded). */
-  setEnabled = async (addon, on) => {
+   *  re-applies (fetching lazily when the items were never loaded). `progress`
+   *  spans fetch (0..0.6) then apply (0.6..1) — full range when the items are
+   *  already in memory. */
+  setEnabled = async (addon, on, progress?) => {
     if (on && !addon.contrib) {
-      if (!addon.items) addon.items = await this._fetchItems(addon);
-      this._apply(addon);
+      const hadItems = !!addon.items;
+      if (!hadItems) addon.items = await this._fetchItems(addon, (f) => progress?.(f * 0.6));
+      this._apply(addon, (f) => progress?.(hadItems ? f : 0.6 + f * 0.4));
     } else if (!on) this._unapply(addon);
     addon.enabled = on;
     addon.failed = false;
     this._persist();
   };
+
+  /** Drop the .vxp IndexedDB cache — rebuilt archives under the same URL
+   *  refetch instead of serving stale zips. */
+  clearCache = () => vxpCache.clear();
 
   /** Drop the addon entirely — contributions reversed, record removed,
    *  registry persisted (URL-sourced addons just vanish for the session). */
@@ -332,7 +400,7 @@ class ExpansionPacks {
    *  aren't walked — the check covers the movie's direct tag surface. */
   dependencies = (addon) => {
     const mp = appState.moviePlayer;
-    const files = addon.contrib?.cfs || [];
+    const files = addon.contrib?.cfs || addon._cfs || []; // _cfs survives disable — usage stays answerable
     if (!mp?.movie || !files.length) return [];
     const cl = appState.contentLibrary;
     const covered = (tag) => {

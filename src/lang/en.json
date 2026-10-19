@@ -65,20 +65,27 @@
     "needUrl": "enter a url first",
     "importing": "importing…",
     "imported": "imported {name}",
-    "disable": "disabled",
+    "disable": "uninstalled",
     "remove": "removed",
+    "install": "install",
+    "uninstall": "uninstall",
     "inUseTitle": "addon in use",
     "inUseBody": "can't be {action} — the movie uses these:",
     "depScene": "scene {scene}",
     "depRollcall": "actor list",
     "importingPct": "importing… {pct}%",
     "importedFiles": "imported {name} · {files} files",
-    "ignored": "ignored {files}"
+    "ignored": "ignored {files}",
+    "usedIn": "used in {where}",
+    "unused": "not used in this movie",
+    "noDesc": "no description"
   },
   "about": {
     "tagline": "an unofficial web port of microsoft 3d movie maker",
     "changelog": "changelog",
-    "source": "source code"
+    "source": "source code",
+    "clearCache": "clear cache",
+    "cacheCleared": "cached packs cleared"
   },
   "tip": {
     "frmRWEnd": "First\nGo to the first frame of the current scene.",

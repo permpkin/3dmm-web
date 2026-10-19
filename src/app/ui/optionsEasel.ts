@@ -19,6 +19,8 @@ import { telemetry } from '../telemetry.ts';
 import { version } from '../../../package.json';
 
 const PW = 380, ROW_H = 19, CAT_H = 15;
+/** Inner left/right inset for tab-view content (rows, fields, rules). */
+const PAD = 2;
 const TABS = ['addons', 'graphics', 'about'];
 const REPO = 'https://github.com/permpkin/3dmm-web';
 
@@ -100,7 +102,9 @@ class TextButton extends Element {
   }
   onPointerEnter() { this.hover = true; this.dirty(); }
   onPointerLeave() { this.hover = false; this.dirty(); }
-  onClick() { if (this.enabled) this.action(); }
+  /** Consume the click — buttons never bubble into a parent's onClick
+   *  (AddonRow's name expands on click). */
+  onClick() { if (this.enabled) this.action(); return true; }
 }
 
 /** Category header — dimmed small-caps text, not interactive. */
@@ -110,9 +114,9 @@ class CatRow extends Element {
   draw(ctx) {
     ctx.fillStyle = '#8f8f96'; ctx.font = `9px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(localizer.translate('opt.' + this.cat).toUpperCase(), 4, this.h / 2 + 1, this.w - 8);
+    ctx.fillText(localizer.translate('opt.' + this.cat).toUpperCase(), PAD, this.h / 2 + 1, this.w - PAD * 2);
     ctx.strokeStyle = '#2c2c30'; ctx.beginPath();
-    ctx.moveTo(2, this.h - 0.5); ctx.lineTo(this.w - 2, this.h - 0.5); ctx.stroke();
+    ctx.moveTo(PAD, this.h - 0.5); ctx.lineTo(this.w - PAD, this.h - 0.5); ctx.stroke();
   }
 }
 
@@ -142,7 +146,7 @@ class OptCheck extends OptRow {
   }
   /** Paint the box, the check fill, and the translated label. */
   _content(ctx) {
-    const on = !!renderOptions[this.key], bx = 4 + this.indent;
+    const on = !!renderOptions[this.key], bx = PAD + this.indent;
     ctx.fillStyle = '#161617'; ctx.fillRect(bx, 4, 11, 11);
     ctx.strokeStyle = '#6a6a72'; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, 4.5, 10, 10);
     if (on) { ctx.fillStyle = '#7db4ff'; ctx.fillRect(bx + 2, 6, 7, 7); }
@@ -163,13 +167,13 @@ class OptSlider extends OptRow {
   }
   /** The track's left edge and width. */
   get tx() { return 118 + this.indent; }
-  get tw() { return this.w - this.tx - 8; }
+  get tw() { return this.w - this.tx - PAD; }
   /** Paint label, current %, track, and thumb at the option's fraction. */
   _content(ctx) {
     const f = Math.max(0, Math.min(1, renderOptions[this.key] * 100 / (this.max - this.min) - this.min / (this.max - this.min)));
     ctx.fillStyle = '#d8d8dc'; ctx.font = `11px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(localizer.translate(labelKey(this.key)), 4 + this.indent, this.h / 2 + 1, this.tx - 12 - this.indent);
+    ctx.fillText(localizer.translate(labelKey(this.key)), PAD + this.indent, this.h / 2 + 1, this.tx - 12 - this.indent);
     ctx.textAlign = 'right';
     ctx.fillText(Math.round(renderOptions[this.key] * 100) + '%', this.tx - 6, this.h / 2 + 1);
     const ty = (this.h - 10) / 2;
@@ -245,13 +249,13 @@ class SelectRow extends OptRow {
   }
   /** The value field's left edge / width — the dropdown anchors to it. */
   get fx() { return 118 + this.indent; }
-  get fw() { return this.w - this.fx - 8; }
+  get fw() { return this.w - this.fx - PAD; }
   /** Paint the label, the sunken field, current value, and ▼. */
   _content(ctx) {
     const cur = this.opts.find(([v]) => String(v) === String(this.get())) || this.opts[0];
     ctx.font = `11px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#d8d8dc'; ctx.textAlign = 'left';
-    ctx.fillText(this.label, 4 + this.indent, this.h / 2 + 1, this.fx - 14 - this.indent);
+    ctx.fillText(this.label, PAD + this.indent, this.h / 2 + 1, this.fx - 14 - this.indent);
     const fy = (this.h - 14) / 2;
     ctx.fillStyle = '#161617'; ctx.fillRect(this.fx, fy, this.fw, 14);
     ctx.strokeStyle = '#6a6a72'; ctx.lineWidth = 1; ctx.strokeRect(this.fx + 0.5, fy + 0.5, this.fw - 1, 13);
@@ -270,6 +274,17 @@ class SelectRow extends OptRow {
 
 /** Row/toggle color by state — green active, light grey inactive, red error. */
 const addonStateColor = (a) => a.failed ? '#d88' : a.enabled ? '#7dc97d' : '#b8b8c0';
+
+/** Byte count for the detail line — B under a KB, KB under a MB. */
+const fmtBytes = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`;
+
+/** Spec's filename (last path segment, query/hash stripped) for the detail
+ *  line — the row's title shows the mod's extInfo name instead. */
+const addonSpecFile = (spec) =>
+  decodeURIComponent((spec.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop()) || spec);
+
+/** Extra height an expanded addon row's detail block adds under the row. */
+const DETAIL_H = 44;
 
 /** Clipped scrolling group — children live on `content` (translated by
  *  -scrollY); painting and hit-testing are bounded to the list rect, wheel
@@ -361,27 +376,70 @@ class Scrollbar extends Element {
   onPointerUp() { this._grab = null; this.dirty(); }
 }
 
-/** Addon list row — name + type badge on the left, an on/off toggle and a
- *  remove 'x' on the right. Status reflects enabled/failed/loading. */
+/** Addon list row — a remove '×' then name + type badge on the left, an
+ *  on/off toggle on the right. Bundled addons (the public/packages/ defaults)
+ *  get no '×' — their specs re-register every boot, so remove can't stick.
+ *  Status reflects enabled/failed/loading. */
 class AddonRow extends OptRow {
   constructor(addon, easel, x, y, w) {
     super(x, y, w, () => true);
     this.addon = addon; this.easel = easel;
+    this.bundled = addon.source === 'bundled';
+    if (easel._expanded.has(addon)) {
+      this.h = ROW_H + DETAIL_H;
+      // usage text — deps walk is only worth it for the rows that show it
+      const deps = expansionPacks.dependencies(addon);
+      this._useText = deps.length
+        ? localizer.translate('addon.usedIn', { where: deps.map((d) => (d.scene ? localizer.translate('addon.depScene', { scene: d.scene }) : localizer.translate('addon.depRollcall')) + (d.actor ? ` — ${d.actor}` : '')).join(', ') })
+        : localizer.translate('addon.unused');
+    }
     const stateColor = addonStateColor(addon);
-    const label = addon.loading ? '…' : addon.failed ? '!' : addon.enabled ? 'on' : 'off';
-    this.add(new TextButton(label, w - 92, 1, 52, 17, () => easel.tryToggle(addon), { size: 10, color: stateColor }));
-    this.add(new TextButton('×', w - 36, 1, 30, 17, () => easel.tryRemove(addon), { size: 12 }));
+    const label = addon.failed ? '!' : addon.enabled ? localizer.translate('addon.uninstall') : localizer.translate('addon.install');
+    addon._row = this; // progress ticks dirty this row while installing
+    if (!addon.loading) {
+      if (!this.bundled) this.add(new TextButton('×', PAD, 1, 20, 17, () => easel.tryRemove(addon), { size: 12 }));
+      this.add(new TextButton(label, w - 62 - PAD, 1, 62, 17, () => easel.tryToggle(addon), { size: 10, color: stateColor }));
+    }
   }
-  /** Paint the name, type badge, and (url) source marker. */
+  /** Click the name/row — toggles the detail block (children's buttons
+   *  consume their own clicks first). */
+  onClick() { this.easel.toggleExpand(this.addon); }
+  /** Paint the name (offset past the '×'), type badge, and — when expanded —
+   *  the detail block: filename · type · source · size, description, usage. */
   _content(ctx) {
     const a = this.addon;
+    const open = this.h > ROW_H;
+    // collapsed rows carry the pack's cfg version; expanded rows drop it —
+    // the detail line already shows filename·type·source
+    const badge = open ? '' : (a.ver || '0.0?');
+    ctx.font = `9px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
+    const bx = this.w - 68 - PAD - (badge ? ctx.measureText(badge).width : 0); // badge right-aligns 6px left of the toggle
+    const nx = this.bundled ? PAD : PAD + 24;
     ctx.font = `12px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`; ctx.textBaseline = 'middle';
     ctx.fillStyle = addonStateColor(a);
     ctx.textAlign = 'left';
-    ctx.fillText(a.name, 4, this.h / 2 + 1, this.w - 150);
+    ctx.fillText(a.name, nx, ROW_H / 2 + 1, bx - nx - 20); // 14px slot reserved for the chevron
+    const nameW = Math.min(ctx.measureText(a.name).width, bx - nx - 20);
     ctx.fillStyle = '#6f6f78'; ctx.font = `9px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
+    ctx.fillText(open ? '▲' : '▼', nx + nameW + 5, ROW_H / 2 + 1);
     ctx.textAlign = 'right';
-    ctx.fillText(`${a.type}${a.source === 'url' ? ' · url' : a.source === 'bundled' ? ' · bundled' : ''}`, this.w - 100, this.h / 2 + 1);
+    if (a.loading) {
+      // installing — the buttons are gone; show the percent + a strip along
+      // the row's bottom edge, ticked dirty by tryToggle's progress callback
+      ctx.fillStyle = '#9fc4ff';
+      ctx.fillText(`${Math.round((a.progress || 0) * 100)}%`, this.w - PAD, ROW_H / 2 + 1);
+      ctx.fillRect(0, this.h - 2, this.w * (a.progress || 0), 2);
+    } else if (badge) ctx.fillText(badge, this.w - 68 - PAD, ROW_H / 2 + 1);
+    if (!open) return;
+    const dw = this.w - PAD * 2 - 12;
+    ctx.textAlign = 'left';
+    const size = a.bytes != null ? ` · ${fmtBytes(a.bytes)}` : '';
+    ctx.fillStyle = '#8f8f96';
+    ctx.fillText(`${addonSpecFile(a.spec)} · ${a.type} · ${a.source}${size}${a.ver ? ` · v${a.ver}` : ''}`, nx, ROW_H + 9, dw);
+    ctx.fillStyle = '#6f6f78'; ctx.font = `italic 9px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
+    ctx.fillText(a.desc || localizer.translate('addon.noDesc'), nx, ROW_H + 22, dw);
+    ctx.fillStyle = '#9fc4ff'; ctx.font = `9px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
+    ctx.fillText(this._useText, nx, ROW_H + 35, dw);
   }
 }
 
@@ -410,7 +468,7 @@ class Divider extends Element {
   /** Paint the rule. */
   draw(ctx) {
     ctx.strokeStyle = '#2c2c30'; ctx.beginPath();
-    ctx.moveTo(2, 3.5); ctx.lineTo(this.w - 2, 3.5); ctx.stroke();
+    ctx.moveTo(PAD, 3.5); ctx.lineTo(this.w - PAD, 3.5); ctx.stroke();
   }
 }
 
@@ -436,25 +494,29 @@ export class OptionsEasel extends EaselView {
         }
       }
     }
-    const ph = 40 + 22 + rows.length * ROW_H + 60;
+    const ph = 40 + 22 + rows.length * ROW_H + 16;
     const px = Math.round((640 - PW) / 2), py = Math.round((480 - ph) / 2);
     this.add(new PanelPlate(px, py, PW, ph, localizer.translate('ui.settings')));
-    // tab strip + one content group per tab
+    // close '×' on the title strip's right end (replaces the old OK button)
+    this.add(new TextButton('×', px + PW - 29, py + 9, 20, 20, modalSlot.close, { size: 12 }));
+    // tab strip sits 10px in; content groups 8px left / 6px right
     this._chips = {}; this._groups = {};
-    const cw = (PW - 32 - 12) / TABS.length;
+    const cw = (PW - 20 - 12) / TABS.length;
     TABS.forEach((t, i) => {
-      this.add(this._chips[t] = new TabChip(t, px + 16 + i * (cw + 6), py + 38, cw, 20, () => this._showTab(t)));
-      const g = new Element(px + 16, py + 64, PW - 32, ph - 118); g.pickable = false;
+      this.add(this._chips[t] = new TabChip(t, px + 10 + i * (cw + 6), py + 38, cw, 20, () => this._showTab(t)));
+      const g = new Element(px + 8, py + 64, PW - 14, ph - 74); g.pickable = false;
       this.add(g); this._groups[t] = g;
     });
+    this._expanded = new Set(); // addon records with the detail block open
     this._buildGraphics(this._groups.graphics, rows);
     this._buildAbout(this._groups.about);
     this._buildAddons(this._groups.addons);
     this._showTab(tab);
-    this.makeButton('okay', 'okayc', px + PW - 66, py + ph - 54, 50, 48, modalSlot.close);
   }
 
-  /** Swap the visible content group + chip states. */
+  /** Swap the visible content group + chip states — the whole view must
+   *  repaint: groups flip visibility but nothing else marks the content
+   *  region dirty, so the outgoing tab's pixels would linger. */
   _showTab(t) {
     this._closeDrop();
     this._tab = t;
@@ -462,6 +524,7 @@ export class OptionsEasel extends EaselView {
       this._groups[k].visible = k === t;
       this._chips[k].active = k === t; this._chips[k].dirty();
     }
+    this.invalidate();
   }
 
   /** Open a dropdown over the field rect (fx, fy, fh) — drops below the
@@ -473,6 +536,7 @@ export class OptionsEasel extends EaselView {
     const y = fy + fh + 2 + mh <= 470 ? fy + fh + 2 : Math.max(8, fy - 2 - mh);
     const menu = new DropMenu(this, opts, cur, onPick, fx, y, w);
     this._drop = [this.add(new DropBackdrop(this)), this.add(menu)];
+    this.invalidate();
   }
 
   /** Close the open dropdown, if any. */
@@ -511,20 +575,32 @@ export class OptionsEasel extends EaselView {
     const f = this._importForm = new Element(0, 0, g.w, 56);
     f.pickable = false;
     const bw = 56; // import sits on the url field's row — 2px gap
-    const url = this._url = new TextField(0, 2, g.w - bw - 2, 22);
+    const url = this._url = new TextField(PAD, 2, g.w - bw - PAD * 3, 22);
     url.font = `12px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
     url.placeholder = localizer.translate('addon.urlHint');
     url.onCommit = () => this._doImport();
     f.add(url);
-    this._importBtn = new TextButton(localizer.translate('addon.doImport'), g.w - bw, 2, bw, 22, () => this._doImport());
+    this._importBtn = new TextButton(localizer.translate('addon.doImport'), g.w - bw - PAD, 2, bw, 22, () => this._doImport());
     f.add(this._importBtn);
-    this._status = new TextElement('', 0, 30, g.w, 13, { size: 9, color: '#e8a0a0', align: 'left', bold: false });
+    this._status = new TextElement('', PAD, 30, g.w - PAD * 2, 13, { size: 9, color: '#e8a0a0', align: 'left', bold: false });
     f.add(this._status);
-    f.add(new Divider(50, g.w));
+    f.add(this._divider = new Divider(50, g.w));
     g.add(f);
     this._listGroup = new ScrollList(0, 56, g.w, g.h - 56);
     g.add(this._listGroup);
     this._syncAddons();
+  }
+
+  /** Re-seat the divider + list under the field row: the status line's slot
+   *  only exists while it has text (progress/error), so an empty status
+   *  collapses the 24px gap and the list rises to fill it. */
+  _layoutAddons() {
+    const dy = this._status?.text ? 50 : 28;
+    this._divider.y = dy;
+    this._listGroup.y = dy + 6;
+    this._listGroup.h = this._addonsGroup.h - this._listGroup.y;
+    this._listGroup.bar.h = this._listGroup.h;
+    this._addonsGroup?.invalidate(); // divider/list moved — repaint the old rects too
   }
 
   /** Validate, fetch+apply via expansionPacks, then reset the form. The url
@@ -533,7 +609,7 @@ export class OptionsEasel extends EaselView {
    *  files like .cfg descriptors). */
   _doImport = async () => {
     if (this._importing) return;
-    const setStatus = (t, color = '#e8a0a0') => { this._status.text = t; this._status.color = color; this._status.dirty(); };
+    const setStatus = (t, color = '#e8a0a0') => { this._status.text = t; this._status.color = color; this._status.dirty(); this._layoutAddons(); };
     const spec = this._url.value.trim();
     if (!spec) { setStatus(localizer.translate('addon.needUrl')); return; }
     this._importing = true;
@@ -564,18 +640,34 @@ export class OptionsEasel extends EaselView {
    *  All rows live in the ScrollList's content group; its scroll offset is
    *  preserved across rebuilds. */
   _syncAddons() {
+    this._layoutAddons();
     const list = this._listGroup, c = list.content;
     c.clear();
     const addons = expansionPacks.addons;
     if (!addons.length) {
       c.add(new TextElement(localizer.translate('addon.empty'), 0, 30, c.w, 20, { size: 11, color: '#8f8f96' }));
     } else {
-      const rw = list.w - 12; // rows always leave room for the scrollbar
-      addons.forEach((a, i) => c.add(new AddonRow(a, this, 0, 6 + i * 20, rw)));
+      // rows stack at variable heights (expanded rows are taller); they back
+      // off exactly the 10px scrollbar, and only when the list overflows
+      const needBar = 6 + addons.reduce((n, a) => n + (this._expanded.has(a) ? ROW_H + DETAIL_H : 20), 0) > list.h;
+      const rw = list.w - (needBar ? 10 : 0);
+      let y = 6;
+      for (const a of addons) {
+        const row = new AddonRow(a, this, 0, y, rw);
+        c.add(row);
+        y += row.h + 1;
+      }
     }
     list.scrollTo(list.scrollY); // clamp + refresh bar visibility
     this._addonsGroup.invalidate(); // the form's strip sits above the list — dirty the whole tab region
   }
+
+  /** Expand/collapse an addon row's detail block. */
+  toggleExpand = (addon) => {
+    if (this._expanded.has(addon)) this._expanded.delete(addon);
+    else this._expanded.add(addon);
+    this._syncAddons();
+  };
 
   /** Enable/disable gate — disabling first checks the open movie for
    *  references into this addon's chunks; dependents block the action via
@@ -586,15 +678,16 @@ export class OptionsEasel extends EaselView {
       const deps = expansionPacks.dependencies(addon);
       if (deps.length) { telemetry.track('addon_dep_blocked', { type: addon.type, action: 'disable', deps: deps.length }); DepsDialog.show(deps, 'disable'); return; }
     }
-    addon.loading = true; this._syncAddons();
+    addon.loading = true; addon.progress = 0; this._syncAddons();
     try {
-      await expansionPacks.setEnabled(addon, !addon.enabled);
+      await expansionPacks.setEnabled(addon, !addon.enabled,
+        (f) => { addon.progress = f; addon._row?.dirty(); });
       telemetry.track('addon_toggle', { type: addon.type, on: addon.enabled });
     } catch (e) {
       addon.failed = true;
       telemetry.error(e, { op: 'addon_toggle' });
     }
-    addon.loading = false;
+    addon.loading = false; delete addon.progress;
     this._syncAddons();
     playbackLoop.drawFrame();
   };
@@ -620,5 +713,9 @@ export class OptionsEasel extends EaselView {
     g.add(new TextElement(localizer.translate('about.tagline'), 0, 88, g.w, 32, { size: 10, color: '#8f8f96', bold: false }));
     g.add(new TextLink(localizer.translate('about.changelog'), 0, 136, g.w, 18, () => window.open(`${REPO}/commits`, '_blank'), { align: 'center', color: '#7db4ff', size: 11 }));
     g.add(new TextLink(localizer.translate('about.source'), 0, 158, g.w, 18, () => window.open(REPO, '_blank'), { align: 'center', color: '#7db4ff', size: 11 }));
+    g.add(new TextButton(localizer.translate('about.clearCache'), (g.w - 110) / 2, 196, 110, 20, async () => {
+      await expansionPacks.clearCache();
+      location.reload(); // fresh fetch for every pack/vxp once the cache is gone
+    }));
   }
 }

@@ -38,10 +38,20 @@ document for an asset-creation task. Two usage modes:
 
 **Scene generator.** `tools/scene-gen/` is the executable half of the scenes
 brief: write a spec (geometry via `geo.mjs` primitives, palette, lights,
-camera list) and `npx vite-node tools/scene-gen/build.mjs specs/<name>.mjs`
+camera list) and `npx vite-node tools/scene-gen/build.mjs specs/scenes/<name>.mjs`
 renders palette-indexed MBMPs + perspective ZBMPs and packs a `.vxp` into
-`public/expansions/`. See `specs/western.mjs` and
+`public/expansions/`. See `specs/scenes/western.mjs` and
 `.devin/skills/3dmm-scene-gen/SKILL.md` for the workflow.
+
+**Prop generator.** `tools/prop-gen/` is the executable half of the
+actors-props brief for simple props: write a spec (`props[]` of
+`{name, build(parts, geo)}` — one part per palette-ramp material, optionally
+textured via `parts.add(ramp, {tex, uv, uvScale})` with TMAPs from `tex.mjs`)
+and `npx vite-node tools/prop-gen/build.mjs specs/props/<name>.mjs` emits a
+`.3cn` (TMPL subtrees: invisible-root part tree, CMTL materials with TMAP
+kids, the nine stock prop actions) plus a `.3th` of rendered PRTH thumbnails,
+packed as a `.vxp`. See `specs/props/household.mjs` and
+`.devin/skills/3dmm-prop-gen/SKILL.md`.
 
 ## Cross-cutting facts every brief relies on
 
