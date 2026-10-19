@@ -134,3 +134,10 @@ gated on it returning [].
 - Casting requires a URL-loadable movie (`movieDocument.lastMovieUrl`) and a
   registered CAF app id; `receiver.html` also runs standalone via `?3mm=`.
 - Test hooks for automation live on `window.__mms` (movieDocument.ts).
+- iOS: the long-press magnifier is only suppressed by `preventDefault` on the
+  canvas `touchstart` (root.ts `_bindInput`) — `pointerdown` preventDefault
+  and `user-select:none` alone don't stop it. Do NOT prevent `touchmove`:
+  canceling one mid-gesture fires `pointercancel` and kills hold-drags.
+- Canvas text never reflows when a webfont lands — `main.ts` awaits
+  `document.fonts.load` for Comic Neue before first paint (bundled in
+  `public/fonts/`, wired via `@font-face` in index.html + styles.ts).
