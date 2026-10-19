@@ -188,6 +188,13 @@ export class UiRoot extends Element {
   _bindInput() {
     const c = this.canvas;
     c.addEventListener('contextmenu', (e) => e.preventDefault()); // no long-press callout / right-click menu over the canvas
+    c.addEventListener('selectstart', (e) => e.preventDefault()); // no drag-selection loupe on iOS
+    // iOS Safari's magnifier/selection gesture arms at touchstart — cancel it
+    // there (pointerdown's preventDefault doesn't reach the gesture layer).
+    // Pointer events still fire normally; only native selection/compat-mouse
+    // die. touchmove is deliberately left alone — canceling one mid-stream
+    // can emit pointercancel and kill an in-progress hold-drag.
+    c.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
     c.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') e.preventDefault(); // no compat-mouse / dbl-tap-zoom side effects
       const p = this._toVirtual(e);
