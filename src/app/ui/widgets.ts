@@ -193,9 +193,21 @@ export class TextElement extends Element {
   }
 }
 
+/** One-shot first-boot stage reveal — consumed by the first MovieScreen to
+ *  ask, so the stage fades in once instead of popping in mid-reveal. */
+let stageRevealed = false;
+
 /** The 3D movie screen — blits the GL canvas into its rect each repaint. */
 export class MovieScreen extends Element {
   constructor(x, y, w, h) { super(x, y, w, h); this.pickable = false; this.playback = null; }
+  /** Fade the blit in over a half second — first boot only; later calls
+   *  (modal uncover, theatre hand-off) are no-ops. */
+  bootFade() {
+    if (stageRevealed) return;
+    stageRevealed = true;
+    this.opacity = 0;
+    this.animate({ opacity: 1 }, { dur: 500 });
+  }
   /** Blit the GL canvas into the rect. */
   draw(ctx) {
     const v = elementById('view');

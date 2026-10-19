@@ -2,6 +2,7 @@
 // mount point (e.g. a GitHub Pages project site at /<user>.github.io/<repo>/)
 import { createReadStream, statSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
+import { name as pkgName, version as pkgVersion } from './package.json';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
@@ -32,6 +33,8 @@ export default {
   // source-map upload — org/project/token all come from SENTRY_* env vars;
   // skipped entirely when SENTRY_AUTH_TOKEN isn't set (plain OSS builds)
   ...(process.env.SENTRY_AUTH_TOKEN ? [sentryVitePlugin({
+    // the upload's release must equal sentry.ts's init release or the maps never apply
+    release: { name: `${pkgName}@${pkgVersion}` },
     sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] }, // public app — don't ship maps
     errorHandler(err) { if (process.env.CI) throw err; console.warn(`[sentry] ${err.message}`); }, // loud in CI, soft locally
   })] : []),

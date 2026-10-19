@@ -54,6 +54,15 @@ export class Library {
     return new Library(files);
   }
 
+  /** Drop every parse-cache entry owned by `file` — called when an addon's
+   *  content files leave the library so a different same-named file can't
+   *  inherit stale parses. */
+  evict(file) {
+    const pfx = `${file.name}:`;
+    for (const m of [this._tmpl, this._bkgd, this._cam, this._tdf, this._msnd])
+      for (const k of [...m.keys()]) if (k.startsWith(pfx)) m.delete(k);
+  }
+
   /** Point the library at a movie file — its chunks then resolve sid-0 tags,
    *  and movie-scoped cache entries + runtime templates are dropped. */
   setMovie(chunkyFile) {

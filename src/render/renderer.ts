@@ -495,9 +495,12 @@ export class Renderer {
         this._lightVP.multiplyMatrices(lc.projectionMatrix, lc.matrixWorldInverse);
         this._selfDir.copy(d).negate();
         for (let k = 0; k < n; k++) this.meshPool[k].material = this._depthMat(this.meshPool[k]._aid, this.meshPool[k]._partMtrl);
+        const selVis = this._selHelper.visible;
+        this._selHelper.visible = false; // the selection box is editor chrome — it must not stamp the occluder id/depth maps
         gl.setRenderTarget(this.selfRT); gl.clear();
         gl.render(this.scene, lc);
         gl.setRenderTarget(target);
+        this._selHelper.visible = selVis;
         for (let k = 0; k < n; k++) this.meshPool[k].material = this.meshPool[k]._mainMat;
         mapOk = true;
       }

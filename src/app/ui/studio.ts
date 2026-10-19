@@ -285,12 +285,16 @@ export class StudioView extends View {
         a.events.splice(a.iaevCur, iaevDelLim - a.iaevCur);
         for (let i = a.iaevCur; i < a.events.length; i++) a.events[i].rtel.irpt += newBase - irptDelLim; // retained events keep shifted rtels
         a.data.route = a.route = pts.concat(tail);
-        a.rtel = { irpt: newBase - 1, dwrOffset: 0, dnfrm: 0 };
+        a.rtel = { irpt: newBase - 1, dwrOffset: 0, dnfrm: a.rtel.dnfrm }; // keep dnfrm: parked-frame ordering must stay monotone vs already-stamped events (matches upstream dnfrm -= rtelCur.dnfrm)
       };
       recording.begin = begin; recording.evt = evt;
       recording.timer = setInterval(() => { // one recording tick per frame
         recording.ticks++;
-        if (!recording.started) return;
+        if (!recording.started) { // arming lives in the tick — a dead-still hold fires no pointer-move events
+          const dl0 = { x: recording.current.x - recording.worldPoint.x, y: recording.current.y - recording.worldPoint.y, z: recording.current.z - recording.worldPoint.z };
+          if (Math.hypot(dl0.x, dl0.y, dl0.z) < 2 && recording.ticks < 5) return;
+          recording.started = true; recording.begin(); // held in place ~5 ticks: kick off the action in place
+        }
         uiSounds.play('recframe'); // the recording metronome ticks once per advanced frame
         const s = appState.moviePlayer.scene, last = a.route[a.rtel.irpt]; // record tip — NOT route end (tail subroute may follow)
         const curl = { x: recording.current.x - recording.startOffset.x, y: recording.current.y - recording.startOffset.y, z: recording.current.z - recording.startOffset.z }; // route-local cursor
@@ -1350,6 +1354,9 @@ const scrollPopupCells = [];
     studioHost.syncRollCall(); // key-deduplicated — repaints only on real change
   });
   }
+  /** Push/uncover hook — on the first-boot reveal the stage fades in behind
+   *  the chrome (MovieScreen.bootFade no-ops on every later uncover). */
+  onEnter() { appState.editorTools.view?.bootFade?.(); }
 }
 /** Owns the mounted StudioView and the chrome sync helpers other modules call.
  *  `studioHost.initialize()` runs once during boot; `sync()`/`syncRollCall()`

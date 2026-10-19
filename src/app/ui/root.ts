@@ -132,7 +132,9 @@ export class UiRoot extends Element {
     if (x === undefined) this.dirtyAll = true;
     else {
       if (x >= UI_WIDTH || y >= UI_HEIGHT || x + w <= 0 || y + h <= 0) return; // fully outside
-      this.dirtyRects.push([Math.max(0, x), Math.max(0, y), Math.min(UI_WIDTH, x + w), Math.min(UI_HEIGHT, y + h)]);
+      // snap to whole pixels — a fractional clip edge antialiases, leaving a
+      // half-composited scanline across the union width for one frame
+      this.dirtyRects.push([Math.max(0, Math.floor(x)), Math.max(0, Math.floor(y)), Math.min(UI_WIDTH, Math.ceil(x + w)), Math.min(UI_HEIGHT, Math.ceil(y + h))]);
     }
     this.start();
   }

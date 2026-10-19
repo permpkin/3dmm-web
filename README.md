@@ -181,6 +181,12 @@ http://localhost:5173/?packs=/expansions/NICK3D
 (`vite.config.js` serves `expansions/` in dev; on a deployed site, host the
 pack somewhere CORS-enabled and use its URL instead.)
 
+The **addons** tab in settings lists every loaded pack/vxp and can import
+new ones at runtime (asset pack or `.vxp` + URL — imported addons persist in
+localStorage across visits), or enable/disable/remove existing ones.
+Disabling or removing is refused while the open movie references the addon's
+content — the dialog lists the scenes/actors holding the references.
+
 ### Parameter reference
 
 | Param | Description |

@@ -23,7 +23,12 @@ export class Thumbnails {
   /** Scan one .3th file into the catalogs — used for builtin data/ files and
    *  expansion packs. `packPal` is a pack's 768-byte RGB palette (pack thumbs
    *  index their own palette). */
+  /** Scan one .3th file into the catalogs — used for builtin data/ files and
+   *  expansion packs. `packPal` is a pack's 768-byte RGB palette (pack thumbs
+   *  index their own palette). Returns a removal record for `unscan` — the
+   *  exact entries this scan added. */
   scanThumbnailFile = (th, packPal = null) => {
+  const rec = { browser: [], rollCall: [], catalogs: [], spletter: [] };
   const pm = (cno) => { const m = parseMbmp(th.data('MBMP', cno)); if (packPal) (m as any).palette = packPal; return m; };
   for (const [ctg, kind] of [['TMTH', 'actor'], ['PRTH', 'prop'], ['BKTH', 'scene']]) {
     for (const t of th.ofType(ctg)) {
@@ -38,13 +43,16 @@ export class Thumbnails {
           if (m2) m.set(k.chid, pm(m2.cno));
         }
         this.backgroundThumbCatalogs.set(t.cno, m);
+        rec.catalogs.push(t.cno);
       }
       if (mk) {
         // TMTH/PRTH map via TFC @8; BKTH cno is the BKGD cno directly
         const cno = ctg === 'BKTH' ? t.cno : new DataView(d.buffer, d.byteOffset).getUint32(8, true);
         const mbmp = pm(mk.cno);
-        if (ctg !== 'BKTH') this.rollCallTemplateThumbs.set(cno, mbmp); // roll call only needs template thumbs
-        this.browserTemplates[kind].push({ cno, name: this.contentName(ctg === 'BKTH' ? 'BKGD' : 'TMPL', cno), mbmp });
+        if (ctg !== 'BKTH') { this.rollCallTemplateThumbs.set(cno, mbmp); rec.rollCall.push(cno); } // roll call only needs template thumbs
+        const item = { cno, name: this.contentName(ctg === 'BKTH' ? 'BKGD' : 'TMPL', cno), mbmp };
+        this.browserTemplates[kind].push(item);
+        rec.browser.push(item);
       }
     }
   }
@@ -54,11 +62,24 @@ export class Thumbnails {
       const ctg2 = r.ctg(), cno = r.i32();
       const gk = t.kids.find((k) => k.ctg === 'GOKD');
       const mk = gk && th.get('GOKD', gk.cno).kids.find((k) => k.ctg === 'MBMP');
-      this.spletterThumbs[kind].push(kind === 'shape'
+      const item = kind === 'shape'
         ? { tdts: cno, mbmp: mk ? pm(mk.cno) : null }
-        : { tag: { sid: 2, ctg: ctg2, cno }, mbmp: mk ? pm(mk.cno) : null });
+        : { tag: { sid: 2, ctg: ctg2, cno }, mbmp: mk ? pm(mk.cno) : null };
+      this.spletterThumbs[kind].push(item);
+      rec.spletter.push(item);
     }
   }
+  return rec;
+};
+
+/** Reverse a scan — remove the exact entries a `scanThumbnailFile` record
+ *  added (pack disable/remove). */
+unscan = (rec) => {
+  const drop = (arr, items) => { for (const it of items) { const i = arr.indexOf(it); if (i >= 0) arr.splice(i, 1); } };
+  for (const kind of ['actor', 'prop', 'scene']) drop(this.browserTemplates[kind], rec.browser);
+  for (const kind of ['font', 'shape', 'mtrl']) drop(this.spletterThumbs[kind], rec.spletter);
+  for (const c of rec.rollCall) this.rollCallTemplateThumbs.delete(c);
+  for (const c of rec.catalogs) this.backgroundThumbCatalogs.delete(c);
 }
 /** Fetch and scan the builtin .3th files under data/ — called during boot. */
 loadBuiltinThumbnails = async () => {

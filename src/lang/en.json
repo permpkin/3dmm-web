@@ -50,7 +50,35 @@
     "aaMsaa4": "msaa 4x",
     "aaMsaa8": "msaa 8x",
     "aaFsaa": "fsaa (2x supersample)",
+    "tabGraphics": "graphics",
+    "tabAddons": "addons",
+    "tabAbout": "about",
     "wireframe": "wireframe"
+  },
+  "addon": {
+    "empty": "no addons installed",
+    "import": "import addon",
+    "doImport": "import",
+    "cancel": "cancel",
+    "importTitle": "import addon",
+    "urlHint": "e.g. https://site.com/some-package.vxp",
+    "needUrl": "enter a url first",
+    "importing": "importing…",
+    "imported": "imported {name}",
+    "disable": "disabled",
+    "remove": "removed",
+    "inUseTitle": "addon in use",
+    "inUseBody": "can't be {action} — the movie uses these:",
+    "depScene": "scene {scene}",
+    "depRollcall": "actor list",
+    "importingPct": "importing… {pct}%",
+    "importedFiles": "imported {name} · {files} files",
+    "ignored": "ignored {files}"
+  },
+  "about": {
+    "tagline": "an unofficial web port of microsoft 3d movie maker",
+    "changelog": "changelog",
+    "source": "source code"
   },
   "tip": {
     "frmRWEnd": "First\nGo to the first frame of the current scene.",
@@ -65,7 +93,7 @@
     "undo": "Undo/Redo\nUndo the last thing you did!  Redo what you undid!",
     "ccp": "Cut, Copy, & Paste Tools\nGet rid of, copy, paste, or move things from one place to another.",
     "port": "Portfolio\nStart a new movie, open an existing movie, and save your work!",
-    "book": "Play in Theatre\nWatch your movie in the theatre!",
+    "book": "Settings\nGraphics options, addon management, and app info.",
     "map": "Source Code\nView the source code for this project on Github.",
     "1back": "Scene Choices\nChoose from many different scenes!",
     "1view": "Camera Angles\nChoose a different camera view of the current scene.",
@@ -109,5 +137,8 @@
   },
   "easel": {
     "soundName": "sound name"
+  },
+  "sort": {
+    "unnamed": "scene {n}"
   }
 }

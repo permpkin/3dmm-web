@@ -72,7 +72,8 @@ export class TheatreView extends View {
     super();
     this.bg = new ImageElement('theatre1', 0, 0, UI_WIDTH, UI_HEIGHT);
     this.add(this.bg);
-    this.add(new MovieScreen(48, 85, 544, 306));       // the movie screen
+    this.screen = new MovieScreen(48, 85, 544, 306);   // the movie screen
+    this.add(this.screen);
     this.add(new Veil(48, 85, 544, 306));
     this.playB = new ImageButton(theatrePlayFace, null, 318, 7, 25, 51, theatreTogglePlay);
     this.add(this.playB);
@@ -88,8 +89,8 @@ export class TheatreView extends View {
     });
     appState.modeSync?.();
   }
-  /** Push hook — arm the rotate prompt. */
-  onEnter() { orientationPrompt.watch(true); }
+  /** Push hook — arm the rotate prompt; first boot fades the screen in. */
+  onEnter() { orientationPrompt.watch(true); this.screen.bootFade(); }
   /** Pop hook — release mode-sync and the rotate prompt. */
   onExit() { appState.setModeSync(null); orientationPrompt.watch(false); }
 }
@@ -101,7 +102,8 @@ export class EmbedView extends View {
   constructor() {
     super();
     this.interactive = true;
-    this.add(new MovieScreen(0, 60, UI_WIDTH, 360));        // 544:306 scaled to the 640-wide stage
+    this.screen = new MovieScreen(0, 60, UI_WIDTH, 360);    // 544:306 scaled to the 640-wide stage
+    this.add(this.screen);
     this.add(new Veil(0, 60, UI_WIDTH, 360));
     this.vol = makeVolumeSlider(14, 395, 12, 70);
     this.add(this.vol);
@@ -112,6 +114,8 @@ export class EmbedView extends View {
     appState.setModeSync(() => { this.playB.sync(); this.invalidate(); });
     appState.modeSync?.();
   }
+  /** Push hook — first boot fades the screen in. */
+  onEnter() { this.screen.bootFade(); }
   /** Pop hook — release mode-sync. */
   onExit() { appState.setModeSync(null); }
 }

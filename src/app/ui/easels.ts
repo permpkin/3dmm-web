@@ -57,8 +57,9 @@ class SorterCell extends Element {
   }
   /** The scene item this cell shows — topIndex + slot. */
   item() { return this.easel.items[this.easel.topIndex + this.i]; }
-  /** Paint the frame (selected variant), the scene thumb, and the
-   *  transition-button faces — or hide the cell when the slot is empty. */
+  /** Paint the frame (selected variant), the scene thumb, the scene name in
+   *  the strip under it, and the transition-button faces — or hide the cell
+   *  when the slot is empty. */
   draw(ctx) {
     const item = this.item(), easel = this.easel;
     if (!item) { this.visible = false; for (const b of this.transitionButtons) b.visible = false; return; }
@@ -66,13 +67,19 @@ class SorterCell extends Element {
     const fr = textureCache.image(easel.topIndex + this.i === easel.currentIndex ? 'e3frms' : 'e3frm', () => this.dirty());
     if (textureCache.isReady(fr)) { ctx.imageSmoothingEnabled = false; ctx.drawImage(fr, 0, 0, 185, 126); }
     ctx.drawImage(easel.thumbCv(item.scene), 8, 12, 143, 80);
+    if (easel._editItem !== item) { // the name strip — the editor field covers it while renaming
+      const nm = (item.name || '').trim();
+      ctx.font = `11px 'Comic Sans MS', cursive, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = nm ? '#dcdce0' : '#7a7a80';
+      ctx.fillText(nm || localizer.translate('sort.unnamed', { n: easel.topIndex + this.i + 1 }), 79, 109, 137);
+    }
     for (const [j, b] of this.transitionButtons.entries()) {
       b.visible = true;
       b.faceOverride = `e3trn${j + 1}${item.trans === T4[j] ? 's' : ''}`;
     }
   }
-  /** Route presses to the easel's cell handler (select/nuke/drag). */
-  onPointerDown() { this.easel.cellDown(this.i); }
+  /** Route presses to the easel's cell handler (select/nuke/drag/rename). */
+  onPointerDown(p) { this.easel.cellDown(this.i, p); }
   /** Feed drags to the easel. */
   onPointerMove(p) { if (this._drag) this.easel.dragMove(this, p); }
   /** End a drag through the easel. */
@@ -86,7 +93,7 @@ export class SorterEasel extends EaselView {
   constructor() {
     super();
     this.makeImage('e3par', SORTER_X, SORTER_Y, 600, 350);
-    this.items = appState.moviePlayer.movie.scenes.map((scene) => ({ scene, trans: scene.trans, batch: null }));
+    this.items = appState.moviePlayer.movie.scenes.map((scene) => ({ scene, trans: scene.trans, name: scene.name || '', batch: null }));
     this.currentIndex = Math.max(0, appState.moviePlayer.sceneIndex);
     this.topIndex = Math.floor(this.currentIndex / 6) * 6;
     this.tool = 'hand';
@@ -116,6 +123,15 @@ export class SorterEasel extends EaselView {
     this.sdn = new ScrollButton('e3down', SORTER_X + 580, SORTER_Y + 273, 17, 19, () => this.scroll(3));
     this.sup.stepSound = 'pageup'; this.sdn.stepSound = 'pagedn';
     this.add(this.sup); this.add(this.sdn);
+
+    // rename field — sits over the clicked cell's name strip while editing
+    this._editItem = null;
+    const nf = this.nameField = new TextField(0, 0, 143, 20);
+    nf.visible = false; nf.commitOnBlur = true; nf.maxLength = 64;
+    nf.font = `11px 'Comic Sans MS', cursive, sans-serif`;
+    nf.onCommit = (v) => { const it = this._editItem; this._editItem = null; nf.visible = false; if (it) it.name = v.trim(); nf.blur(false); this.sync(); };
+    nf.onCancel = () => { this._editItem = null; nf.visible = false; nf.blur(false); this.sync(); };
+    this.add(nf);
 
     this.makeButton('e3port', 'e3portc', SORTER_X + 135, SORTER_Y + 298, 50, 48, () => this.importMovie()).clickSound = 'pfopen'; // import another movie's scenes
     this._onEsc = () => this.dismiss(); // Escape cancels like the cancel button
@@ -160,8 +176,19 @@ export class SorterEasel extends EaselView {
     } catch { return null; }
   }
 
+  /** End an open rename — `commit` keeps the typed value; the field's own
+   *  onCommit handles Enter/blur, so this just drops the field. */
+  _endNameEdit(commit = true) {
+    if (!this._editItem) return;
+    const it = this._editItem, nf = this.nameField;
+    this._editItem = null; nf.visible = false;
+    if (commit) it.name = nf.value.trim();
+    if (nf.focused) nf.blur(false); // value already handled — don't refire onCommit
+  }
+
   /** Refresh cell faces + scroll-arrow visibility after items/topIndex change. */
   sync() {
+    this._endNameEdit(); // any rebuild/scroll commits the open rename
     this.sup.visible = this.topIndex > 0;
     this.sdn.visible = this.topIndex + 6 < this.items.length;
     for (const c of this.cells) c.dirty(); // playbackLoop.drawFrame() computes visibility/faces
@@ -178,11 +205,29 @@ export class SorterEasel extends EaselView {
     this.sync();
   }
 
-  /** Cell pointer-down — nuke tool drops the scene; otherwise selects, and a
-   *  press on the already-selected cell starts a drag. */
-  cellDown(i) {
+  /** Begin a rename — selects the cell and floats the field over its name
+   *  strip. The edit stages into `item.name`; OK writes it to the scene. */
+  editName(i) {
+    this.currentIndex = i;
+    this.sync(); // commits any open rename + repaints the selection
+    const item = this.items[i], cell = this.cells[i - this.topIndex];
+    if (!item || !cell) return;
+    this._editItem = item;
+    const [ax, ay] = cell.abs(), nf = this.nameField;
+    nf.x = ax + 8; nf.y = ay + 97; nf.value = item.name || ''; nf.visible = true;
+    nf.focus(true);
+  }
+
+  /** Cell pointer-down — a press in the name strip starts a rename (hand
+   *  tool); nuke tool drops the scene; otherwise selects, and a press on the
+   *  already-selected cell starts a drag. */
+  cellDown(i, p) {
     const cellIndex = this.topIndex + i;
     if (cellIndex >= this.items.length) return;
+    if (p && this.tool === 'hand') { // the strip under the thumbnail renames
+      const [ax, ay] = this.cells[i].abs();
+      if (p.y - ay >= 94 && p.x - ax < 154) { this.editName(cellIndex); return; }
+    }
     if (this.tool === 'nuke') { // drop the scene, keep the selection valid
       uiSounds.play('nukesn');
       this.items.splice(cellIndex, 1);
@@ -246,15 +291,17 @@ export class SorterEasel extends EaselView {
         if (this.aridLim == null) this.aridLim = 1 + Math.max(0, ...appState.moviePlayer.movie.scenes.flatMap((s) => [...s.actors.values()].map((a) => a.arid)));
         const batch = { srcCf: mv.chunkyFile, srcRoll: mv.rollCall, remap: new Map(), aridOff: this.aridLim };
         this.aridLim += 1 + Math.max(0, ...mv.scenes.flatMap((s) => [...s.actors.values()].map((a) => a.arid))); // next import starts above these arids
-        for (const scene of mv.scenes) this.items.push({ scene, trans: scene.trans, batch });
+        for (const scene of mv.scenes) this.items.push({ scene, trans: scene.trans, name: scene.name || '', batch });
         this.sync();
       } catch (err) { alert(`${f.name}: ${err.message}`); }
     };
     inp.click();
   }
 
-  /** Cancel/close — drops the working list and disarms the tool. */
+  /** Cancel/close — drops the working list (staged names included) and
+   *  disarms the tool. */
   dismiss() {
+    this._endNameEdit(false);
     appState.editorTools.tool = 'none';
     for (const b of Object.values<any>(appState.editorTools.toolButtons || {})) { b.classList.remove('on'); b.syncFace?.(); }
     modalSlot.close();
@@ -263,9 +310,11 @@ export class SorterEasel extends EaselView {
   /** OK — commit the working list into the movie: transitions, imported
    *  scenes' chunk remaps, arid offsets, and roll-call names. Clears undo. */
   applySort() {
+    this._endNameEdit(); // commit any open rename before writing names back
     const mv = appState.moviePlayer.movie;
     for (const item of this.items) {
       item.scene.trans = item.trans;
+      item.scene.name = item.name;
       if (!item.batch) continue;
       const { srcCf, srcRoll, remap, aridOff } = item.batch;
       /** Adopt a sid-0 (embedded) chunk tag into this movie's file — remaps

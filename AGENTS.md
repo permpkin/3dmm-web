@@ -108,6 +108,16 @@ src/render/            three.js renderer (renders into #view)
 fetched once, cached in IDB `mmsvxp`, unzipped into the same routing) · `?lang=` dictionary · `?opts=a,b`
 render flags · `?menu` open settings · `?castid=` CAF receiver app id.
 
+Addons (`expansionPacks`): every applied pack/vxp is a record `{type, spec,
+name, enabled, source:'url'|'stored', items, contrib}` in
+`expansionPacks.addons`; `contrib` holds the ChunkyFiles/thumbnail-scan
+records/texture names it added so `setEnabled(false)`/`remove` can reverse
+them (`Library.evict` drops name-keyed parse caches; `thumbnails.unscan`
+removes catalog entries). Imported addons persist in localStorage
+(`mmsaddons`); URL-sourced ones are session-only. `dependencies(addon)`
+walks the open movie's scenes/actor/roll-call tags — disable/remove is
+gated on it returning [].
+
 ## Docs
 
 `docs/interface-overhaul.md` (plan + locked decisions) ·
