@@ -36,6 +36,13 @@ document for an asset-creation task. Two usage modes:
 | `scenes/` | `scenes-cameras.md` | Backgrounds and camera angles: BKGD + GLCR palette + GLLT lights, CAM chunks (fov/clip/matrix/apos), MBMP RLE backdrop fills, ZBMP depth fills — plus how SCEN chunks in a movie reference them. Recipes: "a wild-west scene with 6 camera angles", camera cuts mid-scene, custom backdrop packs. |
 | `movies/` | `movies.md` | The `.3mm` movie file: MVIE/SCEN/GGFR/GGST scene events, ACTR/PATH/GGAE actor records and the route/event model, GST roll call, TBOX/RTXT text boxes, MSND/WAVE/MIDS sound, THUM thumbnails. Recipes: build a movie from scratch, edit events/routes/actors, embed sounds, round-trip safely. |
 
+**Scene generator.** `tools/scene-gen/` is the executable half of the scenes
+brief: write a spec (geometry via `geo.mjs` primitives, palette, lights,
+camera list) and `npx vite-node tools/scene-gen/build.mjs specs/<name>.mjs`
+renders palette-indexed MBMPs + perspective ZBMPs and packs a `.vxp` into
+`public/expansions/`. See `specs/western.mjs` and
+`.devin/skills/3dmm-scene-gen/SKILL.md` for the workflow.
+
 ## Cross-cutting facts every brief relies on
 
 - **One container.** All asset files are Kauai chunky files (`CHN2` little-endian,
