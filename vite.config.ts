@@ -1,12 +1,16 @@
 // base './' keeps built asset URLs relative so the SPA works under any
 // mount point (e.g. a GitHub Pages project site at /<user>.github.io/<repo>/)
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, statSync, readdirSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { name as pkgName, version as pkgVersion } from './package.json';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
 const EXP_DIR = resolve('expansions'); // dev: ?packs=/expansions/<dir> tests local packs
+// public/packages/*.vxp|zip|3cn… — bundled addons, listed in the addons panel
+// disabled by default. Baked into __BUNDLED_PACKAGES__ at build time.
+let bundledPackages: string[] = [];
+try { bundledPackages = readdirSync(resolve('public/packages')).filter((f) => !f.startsWith('.')); } catch {}
 const MIME = { '.json': 'application/json', '.png': 'image/png', '.cur': 'application/octet-stream' };
 
 export default {
@@ -28,6 +32,7 @@ export default {
     },
   },
   esbuild: { target: 'es2022' },
+  define: { __BUNDLED_PACKAGES__: JSON.stringify(bundledPackages) },
   optimizeDeps: { esbuildOptions: { target: 'es2022' } },
   plugins: [
   // source-map upload — org/project/token all come from SENTRY_* env vars;

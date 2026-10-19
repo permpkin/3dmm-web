@@ -287,7 +287,7 @@ class AddonRow extends OptRow {
     ctx.fillText(a.name, 4, this.h / 2 + 1, this.w - 150);
     ctx.fillStyle = '#6f6f78'; ctx.font = `9px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'right';
-    ctx.fillText(`${a.type}${a.source === 'url' ? ' · url' : ''}`, this.w - 100, this.h / 2 + 1);
+    ctx.fillText(`${a.type}${a.source === 'url' ? ' · url' : a.source === 'bundled' ? ' · bundled' : ''}`, this.w - 100, this.h / 2 + 1);
   }
 }
 

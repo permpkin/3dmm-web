@@ -41,6 +41,12 @@ const vxpCache = new VxpCache();
 /** localStorage registry for imported addons — [{type, spec, name, enabled}]. */
 const ADDON_KEY = 'mmsaddons';
 
+/** Filenames in public/packages/ — baked in by vite.config.ts's define at
+ *  build time. Each becomes a bundled addon spec, listed but disabled until
+ *  the user turns it on. */
+declare const __BUNDLED_PACKAGES__: string[] | undefined;
+const BUNDLED: string[] = (typeof __BUNDLED_PACKAGES__ !== 'undefined' ? __BUNDLED_PACKAGES__ : []) as string[];
+
 // --- asset packs, vxp expansions, and single files -----------------------------
 // Files are routed by extension: .3cn/.chk register a content library (actors,
 // props, backgrounds, materials, sounds; .chk files are the expansion's merge
@@ -64,9 +70,10 @@ class ExpansionPacks {
   // --- registry --------------------------------------------------------------
   /** Stored addon entries — read once per boot list build. */
   _stored() { try { return JSON.parse(localStorage.getItem(ADDON_KEY) || '[]'); } catch { return []; } }
-  /** Persist the stored addons (URL-sourced ones are session-only). */
+  /** Persist the stored addons (URL-sourced ones are session-only; bundled
+   *  defaults persist so an enabled one stays on across reloads). */
   _persist() {
-    try { localStorage.setItem(ADDON_KEY, JSON.stringify(this.addons.filter((a) => a.source === 'stored').map(({ type, spec, name, enabled }) => ({ type, spec, name, enabled })))); }
+    try { localStorage.setItem(ADDON_KEY, JSON.stringify(this.addons.filter((a) => a.source !== 'url').map(({ type, spec, name, enabled }) => ({ type, spec, name, enabled })))); }
     catch { /* quota */ }
   }
   /** Display name for a spec — basename sans extension (an assets.json
@@ -85,18 +92,30 @@ class ExpansionPacks {
     return /\.[a-z0-9]+$/i.test(last) ? 'file' : hint;
   }
 
+  /** Normalized spec key for dedupe — same file spelled with/without a
+   *  leading slash counts once. */
+  _specKey = (spec) => spec.split(/[?#]/)[0].replace(/^\/+/, '').replace(/\/+$/, '');
+
   /** The boot entry list — the stored registry merged with ?packs=/?vxp=
-   *  specs; a spec in both keeps the stored record (and its enabled flag).
-   *  The param only breaks the tie for extensionless specs — a .3cn under
-   *  ?vxp= still loads as a single file. */
+   *  specs and the bundled public/packages/ defaults; a spec in more than
+   *  one source keeps the earlier record (stored > bundled > url — so a
+   *  stored enabled flag wins over the bundled disabled default). The param
+   *  only breaks the tie for extensionless specs — a .3cn under ?vxp= still
+   *  loads as a single file. */
   _entries() {
     const stored = this._stored();
     const specs = [
       ...this._specs('packs').map((spec) => ({ type: this._inferType(spec, 'pack'), spec })),
       ...this._specs('vxp').map((spec) => ({ type: this._inferType(spec, 'vxp'), spec })),
     ];
-    const urlOnly = specs.filter((x) => !stored.some((s) => s.type === x.type && s.spec === x.spec));
-    return [...stored.map((s) => ({ ...s, source: 'stored' })), ...urlOnly.map((s) => ({ ...s, source: 'url', enabled: true }))];
+    const taken = new Set(stored.map((s) => this._specKey(s.spec)));
+    const take = (spec) => !taken.has(this._specKey(spec)) && taken.add(this._specKey(spec)); // claim-or-skip
+    const bundled = BUNDLED.map((f) => `packages/${f}`) // relative — resolves under the app mount
+      .filter(take)
+      .map((spec) => ({ type: this._inferType(spec), spec, source: 'bundled', enabled: false }));
+    const urlOnly = specs.filter((x) => take(x.spec));
+    return [...stored.map((s) => ({ ...s, source: 'stored' })), ...bundled,
+      ...urlOnly.map((s) => ({ ...s, source: 'url', enabled: true }))];
   }
 
   /** Comma-separated ?param= list — a prototype method so the field
@@ -177,10 +196,12 @@ class ExpansionPacks {
    *  chunky files into the content library (+ .3th scans), png/cur into
    *  texture overrides. `.cfg` is the v3dmm mod descriptor — parsed only for
    *  a display name. */
-  _apply = (addon) => {
+  _apply = (addon, sub?) => {
     const rec = { cfs: [], ths: [], scans: [], tex: new Map(), skipped: [] };
-    let packPal = null, loaded = 0;
+    let packPal = null, loaded = 0, n = 0;
+    const wApply = 0.7, wScan = 0.3; // item parse ~70%, .3th scans ~30% of the phase
     for (const it of addon.items) {
+      sub?.(++n / addon.items.length * wApply);
       if (!it) continue;
       const ext = (it.base.split('.').pop() || '').toLowerCase();
       if (ext === '3cn' || ext === 'chk' || ext === '3th' || ext === 'nth') {
@@ -199,11 +220,12 @@ class ExpansionPacks {
       loaded++;
     }
     appState.contentLibrary.content.push(...rec.cfs); // before the .3th scan so chunk names resolve
-    for (const th of rec.ths) rec.scans.push(thumbnails.scanThumbnailFile(th, packPal));
+    rec.ths.forEach((th, i) => { rec.scans.push(thumbnails.scanThumbnailFile(th, packPal)); sub?.(wApply + (i + 1) / rec.ths.length * wScan); });
     for (const [name, bytes] of rec.tex) packTextures.set(name, URL.createObjectURL(new Blob([bytes])));
     addon.contrib = rec;
     addon.loaded = loaded;
     addon.skipped = rec.skipped;
+    sub?.(1);
   };
 
   /** Reverse `_apply` — content files out of the library, thumbnail entries
@@ -236,8 +258,9 @@ class ExpansionPacks {
     let done = 0;
     const cap = () => localizer.translate('boot.pack');
     // all enabled entries fetch in parallel — failures resolve to the error
+    // (fetch covers ~80% of an entry's segment; its _apply finishes the rest)
     const pending = entries.map((e) => e.enabled === false ? null
-      : this._fetchItems(e, (f) => tick?.((done + f) / total, cap())).catch((err) => err));
+      : this._fetchItems(e, (f) => tick?.((done + f * 0.8) / total, cap())).catch((err) => err));
     for (const [i, e] of entries.entries()) {
       const addon = { ...e, name: e.name || this._specName(e.spec), enabled: e.enabled !== false, failed: false };
       this.addons.push(addon);
@@ -288,13 +311,14 @@ class ExpansionPacks {
   /** Import a new addon at runtime — fetches, applies, registers as stored,
    *  persists. The spec's extension settles the type (.vxp/.zip archive,
    *  .json manifest, any other extension a single file, extensionless a
-   *  pack directory). `progress(0..1)` reports fetch progress for the
-   *  status line. Throws on fetch/parse failure — the caller surfaces it. */
+   *  pack directory). `progress(0..1)` covers fetch (0..0.8) then parse/scan
+   *  (0.8..1) so 100% only lands when the addon is actually live. Throws on
+   *  fetch/parse failure — the caller surfaces it. */
   import = async (spec, progress?) => {
     spec = spec.trim();
     const addon: any = { type: this._inferType(spec), spec, name: this._specName(spec), enabled: true, source: 'stored', failed: false };
-    addon.items = await this._fetchItems(addon, progress);
-    this._apply(addon);
+    addon.items = await this._fetchItems(addon, (f) => progress?.(f * 0.8));
+    this._apply(addon, (f) => progress?.(0.8 + f * 0.2));
     this.addons.push(addon);
     this._persist();
     return addon;
