@@ -92,4 +92,5 @@ export class Element {
   /** Pointer entered the rect. */                onPointerEnter() {}
   /** Pointer left the rect. */                   onPointerLeave() {}
   /** A completed press (down+up) on the element. */ onClick(e) {} // eslint-disable-line no-unused-vars
+  /** Mouse wheel over the element — p.dy is virtual pixels. */ onWheel(e) {} // eslint-disable-line no-unused-vars
 }

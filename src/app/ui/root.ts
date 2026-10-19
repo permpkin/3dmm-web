@@ -213,11 +213,19 @@ export class UiRoot extends Element {
     c.addEventListener('pointerup', up);
     c.addEventListener('pointercancel', up);
     c.addEventListener('pointerleave', () => { this.hover?.onPointerLeave(); this.hover = null; cursorManager.reset(); });
+    c.addEventListener('wheel', (e) => {
+      const p: any = this._toVirtual(e);
+      const r = c.getBoundingClientRect(); // DOM wheel px -> virtual px
+      p.dy = e.deltaY * UI_HEIGHT / r.height * (e.deltaMode === 1 ? 16 : 1);
+      const hit = this.topView?.hitTest(p.x, p.y);
+      if (hit && this._walkUp(hit, 'onWheel', p)) e.preventDefault();
+    }, { passive: false });
   }
 
   /** Dispatch to el then bubble up ancestors until one returns true. */
   _walkUp(el, method, p) {
-    for (let e = el; e; e = e.parent) if (e[method]?.(p)) break;
+    for (let e = el; e; e = e.parent) if (e[method]?.(p)) return true;
+    return false;
   }
 
   /** Show a transient toast notice, bottom-left. */

@@ -13,6 +13,7 @@ import { serializeMovie } from '../format/movie.ts';
 import { playbackLoop } from './playbackLoop.ts';
 import { toastHost, baseUrl } from './resources.ts';
 import { editHistory } from './editHistory.ts';
+import { expansionPacks } from './expansionPacks.ts';
 import { telemetry } from './telemetry.ts';
 import { localizer } from './localization.ts';
 
@@ -111,7 +112,7 @@ class MovieDocument {
     window.__mms = { importSoundFile: soundSources.importSoundFile, showRecorder: RecorderEasel.show, userSounds: soundSources.userSounds, getSoundItems: soundSources.getSoundItems, editorTools: appState.editorTools, // debug/test hooks
       insertTextbox: textboxEdits.insertTextbox, pickTextbox: textboxEdits.pickTextbox, selectedTextbox: textboxEdits.selectedTextbox, get selectedTextboxId() { return appState.selectedTextboxId; }, get focusedTextboxId() { return appState.focusedTextboxId; }, get textboxSelection() { return appState.textboxSelection; }, get textboxAttachment() { return appState.textboxAttachment; },
       get pendingPlacement() { return appState.pendingPlacement; }, get selectedChildId() { return appState.selectedChildId; }, spletterThumbs: thumbnails.spletterThumbs, player: () => appState.moviePlayer, browserTemplates: thumbnails.browserTemplates, contentLibrary: appState.contentLibrary, socialPalette: appState.socialPalette,
-      documentDatabase: this.documentDatabase, flushDocument: this.flushDocument, get documentDirty() { return movieDocument.documentDirty; }, set documentDirty(v) { movieDocument.documentDirty = v; },
+      documentDatabase: this.documentDatabase, flushDocument: this.flushDocument, get documentDirty() { return movieDocument.documentDirty; }, set documentDirty(v) { movieDocument.documentDirty = v; }, expansionPacks,
       get movieBytes() { return movieDocument.movieBytes; }, showCallout: tooltips.showCallout, uiRoot, modalSlot };
     appState.moviePlayer.onSound = (ev) => appState.soundQueue.play(ev);
     appState.moviePlayer.onSoundStop = () => appState.soundQueue.stopLoops();

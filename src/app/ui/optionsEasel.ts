@@ -83,9 +83,9 @@ class TabChip extends Element {
 /** Text action button — the same beveled chip style as TabChip but for
  *  actions (import, on/off toggle, remove). */
 class TextButton extends Element {
-  constructor(text, x, y, w, h, onClick, { size = 11 } = {}) {
+  constructor(text, x, y, w, h, onClick, { size = 11, color = '#d8d8dc' } = {}) {
     super(x, y, w, h);
-    this.text = text; this.action = onClick; this.size = size;
+    this.text = text; this.action = onClick; this.size = size; this.color = color;
     this.cursor = CURSORS.pointer; this.hover = false; this.enabled = true;
   }
   /** Paint the chip + centered label. */
@@ -93,7 +93,7 @@ class TextButton extends Element {
     ctx.fillStyle = this.enabled ? (this.hover ? '#4a4a50' : '#3c3c40') : '#2a2a2e';
     ctx.fillRect(0, 0, this.w, this.h);
     ctx.strokeStyle = '#1c1c1e'; ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, this.w - 1, this.h - 1);
-    ctx.fillStyle = this.enabled ? '#d8d8dc' : '#6a6a72';
+    ctx.fillStyle = this.enabled ? this.color : '#6a6a72';
     ctx.font = `bold ${this.size}px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(this.text, this.w / 2, this.h / 2 + 1, this.w - 6);
@@ -268,21 +268,115 @@ class SelectRow extends OptRow {
   }
 }
 
+/** Row/toggle color by state — green active, light grey inactive, red error. */
+const addonStateColor = (a) => a.failed ? '#d88' : a.enabled ? '#7dc97d' : '#b8b8c0';
+
+/** Clipped scrolling group — children live on `content` (translated by
+ *  -scrollY); painting and hit-testing are bounded to the list rect, wheel
+ *  scrolls, and `bar` is the draggable scrollbar on the right edge. */
+class ScrollList extends Element {
+  constructor(x, y, w, h) {
+    super(x, y, w, h);
+    this.scrollY = 0;
+    this.content = new Element(0, 0, w, h); this.content.pickable = false;
+    this.bar = new Scrollbar(this);
+    this.add(this.content); this.add(this.bar);
+  }
+  /** Bottom of the content rows. */
+  get contentH() { return this.content.children.reduce((m, c) => Math.max(m, c.y + c.h), 0); }
+  /** Scrollable range — a small tail pad keeps the last row off the edge. */
+  get maxScroll() { return Math.max(0, this.contentH - this.h + 4); }
+  /** Clamp + apply a scroll offset; keeps `bar.visible` synced. */
+  scrollTo(y) {
+    this.scrollY = Math.max(0, Math.min(this.maxScroll, y));
+    this.content.y = -this.scrollY;
+    this.bar.visible = this.maxScroll > 0;
+    this.dirty();
+  }
+  onWheel(p) { if (!this.maxScroll) return false; this.scrollTo(this.scrollY + p.dy); return true; }
+  /** Paint children clipped to the list rect. */
+  paintTree(ctx) {
+    if (!this.visible || this.opacity <= 0) return;
+    ctx.save(); ctx.translate(this.x, this.y);
+    if (this.opacity < 1) ctx.globalAlpha *= this.opacity;
+    ctx.beginPath(); ctx.rect(0, 0, this.w, this.h); ctx.clip();
+    this.draw(ctx);
+    for (const c of this.children) c.paintTree(ctx);
+    ctx.restore();
+  }
+  /** Children outside the clip can't be hit — pointer coords already map
+   *  through content.y, so only the rect bound needs checking. */
+  hitTest(px, py) {
+    if (!this.visible) return null;
+    const lx = px - this.x, ly = py - this.y;
+    if (lx < 0 || ly < 0 || lx >= this.w || ly >= this.h) return null;
+    for (let i = this.children.length - 1; i >= 0; i--) {
+      const hit = this.children[i].hitTest(lx, ly);
+      if (hit) return hit;
+    }
+    return this.pickable ? this : null; // empty area catches wheel via bubbling
+  }
+}
+
+/** Vertical scrollbar for a ScrollList — track + proportional thumb; drag
+ *  the thumb or click the track to page. */
+class Scrollbar extends Element {
+  constructor(list) {
+    super(list.w - 10, 0, 10, list.h);
+    this.list = list; this._grab = null; this.cursor = CURSORS.pointer;
+  }
+  /** [top, height] of the thumb, or null when nothing to scroll. */
+  _thumb() {
+    const ms = this.list.maxScroll;
+    if (ms <= 0) return null;
+    const th = Math.max(14, this.h * this.h / (this.list.contentH + 4));
+    return [this.list.scrollY / ms * (this.h - th), th];
+  }
+  /** Paint the track and thumb. */
+  draw(ctx) {
+    ctx.fillStyle = '#161617'; ctx.fillRect(0, 0, this.w, this.h);
+    const t = this._thumb();
+    if (t) {
+      ctx.fillStyle = this._grab !== null ? '#5a5a62' : '#3c3c40';
+      ctx.fillRect(1, t[0], this.w - 2, t[1]);
+      ctx.strokeStyle = '#6a6a72'; ctx.lineWidth = 1; ctx.strokeRect(1.5, t[0] + 0.5, this.w - 3, t[1] - 1);
+    }
+  }
+  onPointerDown(e) {
+    const t = this._thumb();
+    if (!t) return true;
+    const [ax, ay] = this.abs(), ey = e.y - ay;
+    if (ey >= t[0] && ey < t[0] + t[1]) this._grab = ey - t[0]; // drag the thumb
+    else this.list.scrollTo(this.list.scrollY + (ey < t[0] ? -1 : 1) * this.h * 0.9); // page the track
+    this.dirty();
+    return true;
+  }
+  onPointerMove(e) {
+    if (this._grab === null) return;
+    const t = this._thumb(); if (!t) return;
+    const ey = e.y - this.abs()[1];
+    this.list.scrollTo((ey - this._grab) / (this.h - t[1]) * this.list.maxScroll);
+    this.dirty();
+  }
+  onPointerUp() { this._grab = null; this.dirty(); }
+}
+
 /** Addon list row — name + type badge on the left, an on/off toggle and a
  *  remove 'x' on the right. Status reflects enabled/failed/loading. */
 class AddonRow extends OptRow {
   constructor(addon, easel, x, y, w) {
     super(x, y, w, () => true);
     this.addon = addon; this.easel = easel;
+    const stateColor = addonStateColor(addon);
     const label = addon.loading ? '…' : addon.failed ? '!' : addon.enabled ? 'on' : 'off';
-    this.add(new TextButton(label, w - 92, 1, 52, 17, () => easel.tryToggle(addon), { size: 10 }));
+    this.add(new TextButton(label, w - 92, 1, 52, 17, () => easel.tryToggle(addon), { size: 10, color: stateColor }));
     this.add(new TextButton('×', w - 36, 1, 30, 17, () => easel.tryRemove(addon), { size: 12 }));
   }
   /** Paint the name, type badge, and (url) source marker. */
   _content(ctx) {
     const a = this.addon;
     ctx.font = `12px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`; ctx.textBaseline = 'middle';
-    ctx.fillStyle = a.failed ? '#d88' : a.enabled ? '#d8d8dc' : '#8f8f96';
+    ctx.fillStyle = addonStateColor(a);
     ctx.textAlign = 'left';
     ctx.fillText(a.name, 4, this.h / 2 + 1, this.w - 150);
     ctx.fillStyle = '#6f6f78'; ctx.font = `9px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif`;
@@ -411,7 +505,6 @@ export class OptionsEasel extends EaselView {
    *  URL field, status, import) above the rebuilt list group. */
   _buildAddons(g) {
     this._addonsGroup = g;
-    this._addonTop = 0;
     // import form — url + inline button; the type is inferred from the spec.
     // The controls live in their own group so _syncAddons never rebuilds
     // them mid-edit.
@@ -429,8 +522,7 @@ export class OptionsEasel extends EaselView {
     f.add(this._status);
     f.add(new Divider(50, g.w));
     g.add(f);
-    this._listGroup = new Element(0, 56, g.w, g.h - 56);
-    this._listGroup.pickable = false;
+    this._listGroup = new ScrollList(0, 56, g.w, g.h - 56);
     g.add(this._listGroup);
     this._syncAddons();
   }
@@ -468,29 +560,21 @@ export class OptionsEasel extends EaselView {
     }
   };
 
-  /** Max addon rows visible without scrolling. */
-  get _addonPage() { return Math.floor((this._listGroup.h - 44) / 20); }
-
-  /** Rebuild the addon list rows — called after every enable/remove/import. */
+  /** Rebuild the addon list rows — called after every enable/remove/import.
+   *  All rows live in the ScrollList's content group; its scroll offset is
+   *  preserved across rebuilds. */
   _syncAddons() {
-    const g = this._listGroup;
-    g.clear();
+    const list = this._listGroup, c = list.content;
+    c.clear();
     const addons = expansionPacks.addons;
     if (!addons.length) {
-      g.add(new TextElement(localizer.translate('addon.empty'), 0, 30, g.w, 20, { size: 11, color: '#8f8f96' }));
+      c.add(new TextElement(localizer.translate('addon.empty'), 0, 30, c.w, 20, { size: 11, color: '#8f8f96' }));
     } else {
-      const page = this._addonPage;
-      this._addonTop = Math.max(0, Math.min(this._addonTop, addons.length - page));
-      const scrollable = addons.length > page;
-      addons.slice(this._addonTop, this._addonTop + page).forEach((a, i) =>
-        g.add(new AddonRow(a, this, 0, 6 + i * 20, scrollable ? g.w - 22 : g.w)));
-      if (scrollable) { // arrows center in the reserved right margin — clear of the rows
-        const mid = 6 + page * 10;
-        g.add(new TextButton('▲', g.w - 18, mid - 14, 16, 12, () => { this._addonTop--; this._syncAddons(); }, { size: 8 }));
-        g.add(new TextButton('▼', g.w - 18, mid + 2, 16, 12, () => { this._addonTop++; this._syncAddons(); }, { size: 8 }));
-      }
+      const rw = list.w - 12; // rows always leave room for the scrollbar
+      addons.forEach((a, i) => c.add(new AddonRow(a, this, 0, 6 + i * 20, rw)));
     }
-    this._addonsGroup.invalidate(); // the form's strip sits above g — dirty the whole tab region
+    list.scrollTo(list.scrollY); // clamp + refresh bar visibility
+    this._addonsGroup.invalidate(); // the form's strip sits above the list — dirty the whole tab region
   }
 
   /** Enable/disable gate — disabling first checks the open movie for
