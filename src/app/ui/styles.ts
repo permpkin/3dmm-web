@@ -18,7 +18,7 @@ body { display: flex; flex-direction: column; }
 
 #view { position: absolute; image-rendering: pixelated; touch-action: none; }
 #rotMsg { position: fixed; inset: 0; z-index: 90; background: #000; display: none; align-items: center; justify-content: center;
-  color: #888; font: bold 16px 'Comic Sans MS', cursive, sans-serif; text-align: center; padding: 2em; }
+  color: #888; font: bold 16px 'Comic Neue', cursive, sans-serif; text-align: center; padding: 2em; }
 #rotMsg.show { display: flex; }
 #studio #selBox { display: none; } /* unused — selection is a 3D bounding box in-scene */
 #ui { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; z-index: 55; touch-action: none; }
