@@ -11,6 +11,9 @@ export function injectAppStyles() {
   const el = document.createElement('style');
   el.id = 'appStyles';
   el.textContent = `
+@font-face { font-family: 'Comic Neue'; src: url('fonts/ComicNeue-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; }
+@font-face { font-family: 'Comic Neue'; src: url('fonts/ComicNeue-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; }
+@font-face { font-family: 'Comic Neue'; src: url('fonts/ComicNeue-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; }
 html, body { margin: 0; height: 100%; height: 100dvh; background: #000; color: #ccc; font: 12px monospace; }
 body { display: flex; flex-direction: column; }
 #stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }

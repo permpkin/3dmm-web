@@ -29,6 +29,17 @@ import { localizer } from './app/localization.ts';
 // --- boot: splash, texture warm, content library -------------------------------
 telemetry.init();
 injectAppStyles();
+// Canvas text bakes whatever face is resolved at paint time — it never
+// reflows when a webfont lands. Wait (bounded) for the bundled Comic Neue so
+// iOS, which has no system 'Comic Sans MS', doesn't paint the UI in fallback.
+await Promise.race([
+  Promise.all([
+    document.fonts.load('12px "Comic Neue"'),
+    document.fonts.load('bold 12px "Comic Neue"'),
+    document.fonts.load('italic 12px "Comic Neue"'),
+  ]),
+  sleep(1500), // a stalled font fetch must never stall boot
+]);
 const warmupProgress = bootView.segment(0.18);
 bootSequence.progressBar.hidden = false;
 const splashT0 = performance.now();
