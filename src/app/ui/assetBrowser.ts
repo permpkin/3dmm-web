@@ -57,13 +57,13 @@ class BrowserCell extends Element {
     else {
       ctx.fillStyle = '#222'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       if (item.scene) { // scene cell: index, name, length
-        ctx.font = 'bold 14px "Comic Sans MS", cursive, sans-serif';
+        ctx.font = 'bold 14px "Comic Neue", cursive, sans-serif';
         ctx.fillText(`${item.sceneIndex + 1}`, cw / 2, 16);
-        ctx.font = '11px "Comic Sans MS", cursive, sans-serif';
+        ctx.font = '11px "Comic Neue", cursive, sans-serif';
         ctx.fillText((item.scene.name || 'scene').slice(0, 18), cw / 2, 40);
         ctx.fillText(`${item.scene.lastFrame - item.scene.firstFrame + 1} frames`, cw / 2, 58);
       } else { // sound name cell
-        ctx.font = '10px "Comic Sans MS", cursive, sans-serif';
+        ctx.font = '10px "Comic Neue", cursive, sans-serif';
         ctx.fillText(item.name, cw / 2, ch / 2, cw - 4);
       }
     }
@@ -111,7 +111,7 @@ export class AssetBrowserView extends ModalView {
     this.pageTextEl = new Element(def.x + def.pageText[0], def.y + def.pageText[1], 64, 29);
     this.pageTextEl.pickable = false;
     this.pageTextEl.draw = (ctx) => {
-      ctx.fillStyle = '#333'; ctx.font = "bold 15px 'Comic Sans MS', cursive, sans-serif";
+      ctx.fillStyle = '#333'; ctx.font = "bold 15px 'Comic Neue', cursive, sans-serif";
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(localizer.translate('ui.pageNum', { page: this.pageIndex + 1, total: this.pageCount() }), 32, 9);
     };

@@ -120,7 +120,7 @@ rollCallThumbFor = (cno, actor) => {
       const txt = (actor.data.name || actor.template.text || actor.template.name || '').trim();
       let size = 20, lines = [];
       for (; size > 6; size--) { // shrink until it fits the 34px-wide cell
-        ctx.font = `bold ${size}px "Comic Sans MS", cursive, sans-serif`;
+        ctx.font = `bold ${size}px "Comic Neue", cursive, sans-serif`;
         const words = txt.split(/\s+/).filter(Boolean);
         lines = []; let cur = '', fits = true;
         for (const w of words) {
@@ -131,7 +131,7 @@ rollCallThumbFor = (cno, actor) => {
         if (cur) lines.push(cur);
         if (fits && lines.length * (size + 2) <= 66) break;
       }
-      ctx.font = `bold ${size}px "Comic Sans MS", cursive, sans-serif`;
+      ctx.font = `bold ${size}px "Comic Neue", cursive, sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#222';
       lines.forEach((l, i) => ctx.fillText(l, 19, 35 + (i - (lines.length - 1) / 2) * (size + 2)));
     }
