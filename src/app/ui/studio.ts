@@ -65,7 +65,7 @@ class StudioText extends Element {
   draw(ctx) {
     if (!this.text) return;
     ctx.fillStyle = this.color;
-    ctx.font = `bold ${this.size}px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.font = `bold ${this.size}px 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = this.align; ctx.textBaseline = 'middle';
     ctx.fillText(this.text, this.w / 2, this.h / 2, this.w - 2);
   }
@@ -638,7 +638,7 @@ export class StudioView extends View {
     nameEl.pickable = true; nameEl.cursor = CURSORS.ibeam;
     const nameField = new TextField(30, 464, 296, 16);
     nameField.bevel = false; nameField.bg = '#cfe8ff'; nameField.padX = 3;
-    nameField.font = "bold 13px 'Comic Sans MS', cursive, sans-serif";
+    nameField.font = "bold 13px 'Comic Neue', cursive, sans-serif";
     nameField.maxLength = 64; nameField.visible = false; nameField.commitOnBlur = true;
     const commit = (ok, v) => {
       nameField.visible = false; nameField.blur(false);
@@ -1028,8 +1028,8 @@ const scrollPopupCells = [];
         const x0 = this.w * 0.05;
         ctx.fillStyle = '#222'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
         if (item.name !== undefined) { ctx.font = `12px '${item.name}',sans-serif`; ctx.fillText(item.name, x0, this.h / 2, this.w * 0.93); }
-        else if (item.dyp !== undefined) { ctx.font = `${item.dyp}px "Comic Sans MS",sans-serif`; ctx.fillText('Abcg', x0, this.h / 2, this.w * 0.93); }
-        else { ctx.font = `${item.grfont & 1 ? 'bold ' : ''}${item.grfont & 2 ? 'italic ' : ''}14px "Comic Sans MS",sans-serif`; ctx.fillText('Ab', x0, this.h / 2, this.w * 0.93); }
+        else if (item.dyp !== undefined) { ctx.font = `${item.dyp}px "Comic Neue",sans-serif`; ctx.fillText('Abcg', x0, this.h / 2, this.w * 0.93); }
+        else { ctx.font = `${item.grfont & 1 ? 'bold ' : ''}${item.grfont & 2 ? 'italic ' : ''}14px "Comic Neue",sans-serif`; ctx.fillText('Ab', x0, this.h / 2, this.w * 0.93); }
       }
     }
     /** Press — the 'h' face is a press state, not hover. */
