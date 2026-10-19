@@ -51,7 +51,7 @@ class PanelPlate extends Element {
     ctx.fillStyle = '#26262a'; ctx.fillRect(6, 6, w - 12, 26);
     ctx.strokeStyle = '#1a1a1c'; ctx.lineWidth = 1; ctx.strokeRect(6.5, 6.5, w - 13, 25);
     ctx.fillStyle = '#d8d8dc';
-    ctx.font = `bold 13px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.font = `bold 13px 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(this.title, w / 2, 19);
   }
@@ -71,7 +71,7 @@ class TabChip extends Element {
     ctx.strokeStyle = this.active ? '#8f8f96' : '#1c1c1e';
     ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, this.w - 1, this.h - 1);
     ctx.fillStyle = this.active ? '#e8e8ec' : '#9f9fa6';
-    ctx.font = `bold 11px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.font = `bold 11px 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(localizer.translate('opt.tab' + this.tab[0].toUpperCase() + this.tab.slice(1)), this.w / 2, this.h / 2 + 1);
   }
@@ -94,7 +94,7 @@ class TextButton extends Element {
     ctx.fillRect(0, 0, this.w, this.h);
     ctx.strokeStyle = '#1c1c1e'; ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, this.w - 1, this.h - 1);
     ctx.fillStyle = this.enabled ? '#d8d8dc' : '#6a6a72';
-    ctx.font = `bold ${this.size}px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.font = `bold ${this.size}px 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(this.text, this.w / 2, this.h / 2 + 1, this.w - 6);
   }
@@ -108,7 +108,7 @@ class CatRow extends Element {
   constructor(cat, x, y, w) { super(x, y, w, CAT_H); this.cat = cat; this.pickable = false; }
   /** Paint the label. */
   draw(ctx) {
-    ctx.fillStyle = '#8f8f96'; ctx.font = `9px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.fillStyle = '#8f8f96'; ctx.font = `9px 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(localizer.translate('opt.' + this.cat).toUpperCase(), 4, this.h / 2 + 1, this.w - 8);
     ctx.strokeStyle = '#2c2c30'; ctx.beginPath();
@@ -146,7 +146,7 @@ class OptCheck extends OptRow {
     ctx.fillStyle = '#161617'; ctx.fillRect(bx, 4, 11, 11);
     ctx.strokeStyle = '#6a6a72'; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, 4.5, 10, 10);
     if (on) { ctx.fillStyle = '#7db4ff'; ctx.fillRect(bx + 2, 6, 7, 7); }
-    ctx.fillStyle = '#d8d8dc'; ctx.font = `12px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.fillStyle = '#d8d8dc'; ctx.font = `12px 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(localizer.translate(labelKey(this.key)), bx + 17, this.h / 2 + 1, this.w - bx - 20);
   }
@@ -167,7 +167,7 @@ class OptSlider extends OptRow {
   /** Paint label, current %, track, and thumb at the option's fraction. */
   _content(ctx) {
     const f = Math.max(0, Math.min(1, renderOptions[this.key] * 100 / (this.max - this.min) - this.min / (this.max - this.min)));
-    ctx.fillStyle = '#d8d8dc'; ctx.font = `11px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.fillStyle = '#d8d8dc'; ctx.font = `11px 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(localizer.translate(labelKey(this.key)), 4 + this.indent, this.h / 2 + 1, this.tx - 12 - this.indent);
     ctx.textAlign = 'right';
@@ -200,7 +200,7 @@ class DropItem extends Element {
   /** Paint hover strip + label (current pick reads accent). */
   draw(ctx) {
     if (this.hover) { ctx.fillStyle = '#4a4a50'; ctx.fillRect(0, 0, this.w, this.h); }
-    ctx.font = `11px 'Comic Sans MS', cursive, sans-serif`; ctx.textBaseline = 'middle';
+    ctx.font = `11px 'Comic Neue', cursive, sans-serif`; ctx.textBaseline = 'middle';
     ctx.fillStyle = this.v === this.menu.cur ? '#9fc4ff' : '#d8d8dc';
     ctx.textAlign = 'left';
     ctx.fillText(this.label, 8, this.h / 2 + 1, this.w - 12);
@@ -249,7 +249,7 @@ class SelectRow extends OptRow {
   /** Paint the label, the sunken field, current value, and ▼. */
   _content(ctx) {
     const cur = this.opts.find(([v]) => String(v) === String(this.get())) || this.opts[0];
-    ctx.font = `11px 'Comic Sans MS', cursive, sans-serif`; ctx.textBaseline = 'middle';
+    ctx.font = `11px 'Comic Neue', cursive, sans-serif`; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#d8d8dc'; ctx.textAlign = 'left';
     ctx.fillText(this.label, 4 + this.indent, this.h / 2 + 1, this.fx - 14 - this.indent);
     const fy = (this.h - 14) / 2;
@@ -281,11 +281,11 @@ class AddonRow extends OptRow {
   /** Paint the name, type badge, and (url) source marker. */
   _content(ctx) {
     const a = this.addon;
-    ctx.font = `12px 'Comic Sans MS', cursive, sans-serif`; ctx.textBaseline = 'middle';
+    ctx.font = `12px 'Comic Neue', cursive, sans-serif`; ctx.textBaseline = 'middle';
     ctx.fillStyle = a.failed ? '#d88' : a.enabled ? '#d8d8dc' : '#8f8f96';
     ctx.textAlign = 'left';
     ctx.fillText(a.name, 4, this.h / 2 + 1, this.w - 150);
-    ctx.fillStyle = '#6f6f78'; ctx.font = `9px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.fillStyle = '#6f6f78'; ctx.font = `9px 'Comic Neue', cursive, sans-serif`;
     ctx.textAlign = 'right';
     ctx.fillText(`${a.type}${a.source === 'url' ? ' · url' : ''}`, this.w - 100, this.h / 2 + 1);
   }
@@ -419,7 +419,7 @@ export class OptionsEasel extends EaselView {
     f.pickable = false;
     const bw = 56; // import sits on the url field's row — 2px gap
     const url = this._url = new TextField(0, 2, g.w - bw - 2, 22);
-    url.font = `12px 'Comic Sans MS', cursive, sans-serif`;
+    url.font = `12px 'Comic Neue', cursive, sans-serif`;
     url.placeholder = localizer.translate('addon.urlHint');
     url.onCommit = () => this._doImport();
     f.add(url);

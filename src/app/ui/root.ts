@@ -240,7 +240,7 @@ class Toast extends Element {
   /** Draw the pill + text. */
   draw(ctx) {
     if (!this.msg) return;
-    ctx.font = "bold 12px 'Comic Sans MS', cursive, sans-serif";
+    ctx.font = "bold 12px 'Comic Neue', cursive, sans-serif";
     const w = Math.min(this.w, ctx.measureText(this.msg).width + 16);
     ctx.fillStyle = 'rgba(0,0,0,.75)';
     ctx.beginPath(); ctx.roundRect(0, 0, w, this.h, 4); ctx.fill();
