@@ -14,7 +14,8 @@ export function injectAppStyles() {
 @font-face { font-family: 'Comic Neue'; src: url('fonts/ComicNeue-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; }
 @font-face { font-family: 'Comic Neue'; src: url('fonts/ComicNeue-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; }
 @font-face { font-family: 'Comic Neue'; src: url('fonts/ComicNeue-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; }
-html, body { margin: 0; height: 100%; height: 100dvh; background: #000; color: #ccc; font: 12px monospace; }
+html, body { margin: 0; height: 100%; height: 100dvh; background: #000; color: #ccc; font: 12px monospace;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 body { display: flex; flex-direction: column; }
 #stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
 #studio { position: relative; touch-action: none; aspect-ratio: 640 / 480; height: min(100%, 75vw); margin: auto; overflow: hidden; container-type: size; }

@@ -187,6 +187,7 @@ export class UiRoot extends Element {
    *  click on up-over-same-element. */
   _bindInput() {
     const c = this.canvas;
+    c.addEventListener('contextmenu', (e) => e.preventDefault()); // no long-press callout / right-click menu over the canvas
     c.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') e.preventDefault(); // no compat-mouse / dbl-tap-zoom side effects
       const p = this._toVirtual(e);
