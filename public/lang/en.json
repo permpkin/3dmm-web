@@ -2,7 +2,8 @@
   "boot": {
     "loading": "warming up",
     "palette": "loading palette",
-    "pack": "loading asset pack"
+    "pack": "loading asset pack",
+    "webglFailed": "3D graphics (WebGL) failed to start on this device. Try reloading the page — if it keeps happening, try a different browser or device."
   },
   "pack": {
     "noFiles": "no files array",

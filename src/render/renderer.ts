@@ -175,6 +175,27 @@ void main(){
   else outColor = cur;
 }`;
 
+/** Thrown by `createRenderer` when the browser can't hand out a WebGL context
+ *  at all (GPU blocked/disabled/crashed) — a distinct name so capability
+ *  failures group separately from mid-boot THREE errors in Sentry. */
+export class WebGLUnavailableError extends Error {
+  constructor(msg) { super(msg); this.name = 'WebGLUnavailableError'; }
+}
+
+/** Build a Renderer, or throw WebGLUnavailableError when no WebGL context is
+ *  available. A throwaway-canvas probe runs first so a hard failure never
+ *  reaches THREE — WebGLRenderer console.errors once per context-name attempt
+ *  before throwing its generic 'Error creating WebGL context.'. */
+export const createRenderer = (canvas, basePalette) => {
+  let ctx = null;
+  try {
+    const probe = document.createElement('canvas');
+    ctx = probe.getContext('webgl2') || probe.getContext('webgl') || probe.getContext('experimental-webgl');
+  } catch { /* probe failure = no WebGL */ }
+  if (!ctx) throw new WebGLUnavailableError('browser could not create a WebGL context');
+  return new Renderer(canvas, basePalette); // probe passed — a throw here is a real renderer failure
+};
+
 /** WebGL scene renderer reproducing 3DMM's 8-bit palette pipeline — indexed
  *  background image + depth, palette-mapped actor shading, light-space shadow
  *  maps, scene transitions, antialiasing, and the textbox overlay.

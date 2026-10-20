@@ -20,7 +20,7 @@ import { tooltips } from './app/ui/tooltips.ts';
 // src/app/ui/ (studio, browsers, easels, bio, tooltips, theatre/embed).
 import { Library, CONTENT_FILES } from './engine/library.ts';
 import { SoundQueue } from './engine/sound.ts';
-import { Renderer } from './render/renderer.ts';
+import { createRenderer } from './render/renderer.ts';
 import { assetUrl, baseUrl, elementById, sleep, toastHost } from './app/resources.ts';
 import { appState } from './app/appState.ts';
 import { localizer } from './app/localization.ts';
@@ -73,7 +73,13 @@ appState.setContentLibrary(await Library.load((n) => assetUrl(`data/${n}`), (n, 
 }));
 appState.setSocialPalette(new Uint8Array(await (await fetch(`${baseUrl}local/socpal.pal`)).arrayBuffer()));
 bootSequence.advanceMiscTick(localizer.translate('boot.palette'));
-appState.setSceneRenderer(new Renderer(elementById('view'), appState.socialPalette));
+try {
+  appState.setSceneRenderer(createRenderer(elementById('view'), appState.socialPalette));
+} catch (e) { // no WebGL at all (GPU blocked/crashed) — nothing below can run without it
+  telemetry.error(e, { op: 'webgl_init' });
+  bootView.fail(localizer.translate('boot.webglFailed'));
+  await new Promise<void>(() => {}); // halt module eval — the fatal notice stays up
+}
 appState.setSoundQueue(new SoundQueue(appState.contentLibrary));
 
 await thumbnails.loadBuiltinThumbnails();

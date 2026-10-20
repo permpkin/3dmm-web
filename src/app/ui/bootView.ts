@@ -36,11 +36,12 @@ class BootView extends View {
     this.add(this.artEl);
     this.add(new class extends Element { // progress bar + caption, bottom-center
       constructor() { super(0, 0, UI_WIDTH, UI_HEIGHT); this.pickable = false; }
-      /** Paint the progress bar + caption (nothing while progress < 0). The
-       *  bar sits at 27%/72% like the shipped boot — the gap between the
-       *  film-strip art and the credits block. */
+      /** Paint the fatal notice, or the progress bar + caption (nothing
+       *  while progress < 0). The bar sits at 27%/72% like the shipped
+       *  boot — the gap between the film-strip art and the credits block. */
       draw(ctx) {
         const r = this._root;
+        if (r.fatal) return this._drawFatal(ctx, r.fatal);
         if (r.progress < 0) return;
         const bw = 294, bh = 16, bx = 173, by = 346; // left 27%, top 72% of 640x480
         ctx.fillStyle = '#0c0c0c'; ctx.fillRect(bx, by, bw, bh);
@@ -52,6 +53,21 @@ class BootView extends View {
           ctx.textAlign = 'center'; ctx.fillText(r.caption, UI_WIDTH / 2, by + bh + 22);
         }
       }
+      /** Fatal boot notice — dim the splash and center the word-wrapped message. */
+      _drawFatal(ctx, msg) {
+        ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(0, 0, this.w, this.h);
+        ctx.font = "bold 14px 'Comic Sans MS', 'Comic Neue', cursive, sans-serif";
+        ctx.fillStyle = '#eee'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const lines: string[] = [], maxW = this.w - 160;
+        let line = '';
+        for (const w of String(msg).split(/\s+/)) { // word-wrap
+          const t = line ? `${line} ${w}` : w;
+          if (line && ctx.measureText(t).width > maxW) { lines.push(line); line = w; } else line = t;
+        }
+        if (line) lines.push(line);
+        const lh = 20, y0 = this.h / 2 - (lines.length - 1) * lh / 2;
+        lines.forEach((l, i) => ctx.fillText(l, this.w / 2, y0 + i * lh));
+      }
     })._root = this;
   }
 
@@ -59,6 +75,9 @@ class BootView extends View {
 
   /** Dismiss the splash — fades the canvas BootView off the stack. */
   done = () => uiRoot.pop('fade');
+
+  /** Fatal boot failure — drop the progress UI and paint `msg` instead. */
+  fail = (msg) => { this.progress = -1; this.fatal = msg; this.invalidate(); };
 
   /** Arm a weighted progress segment; returns a ticker (fraction, caption?). */
   segment = (w) => {
