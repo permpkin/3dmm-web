@@ -6,6 +6,7 @@ const ctxStub = () => new Proxy({}, { get: (t, k) => (k === 'measureText' ? () =
 const elStub = () => new Proxy({
   style: {}, dataset: {}, children: [],
   classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+  getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }),
 }, {
   get(t, k) {
     if (k in t) return (t as any)[k];

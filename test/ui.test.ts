@@ -85,7 +85,7 @@ describe('hitTest', () => {
 describe('paint order', () => {
   it('tips layer paints after all views, even under a clipped dirty-rect repaint', async () => {
     const calls = [];
-    const ctx = { save() {}, restore() {}, translate() {}, beginPath() {}, rect() {}, clip() {}, clearRect() {} };
+    const ctx = { save() {}, restore() {}, translate() {}, beginPath() {}, rect() {}, clip() {}, clearRect() {}, drawImage() {} };
     Object.assign(ctx, { set globalAlpha(v) {}, get globalAlpha() { return 1; } });
     const canvas = { getContext: () => ctx, style: {}, addEventListener() {}, width: 0, height: 0,
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 640, height: 480 }) };
