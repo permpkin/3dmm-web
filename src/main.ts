@@ -19,6 +19,7 @@ import { tooltips } from './app/ui/tooltips.ts';
 // playbackLoop, renderOptions, soundSources, edit/ mutations) and
 // src/app/ui/ (studio, browsers, easels, bio, tooltips, theatre/embed).
 import { Library, CONTENT_FILES } from './engine/library.ts';
+import { replayMirror } from './app/replayMirror.ts';
 import { SoundQueue } from './engine/sound.ts';
 import { createRenderer } from './render/renderer.ts';
 import { assetUrl, baseUrl, elementById, sleep, toastHost } from './app/resources.ts';
@@ -29,6 +30,7 @@ import { localizer } from './app/localization.ts';
 // --- boot: splash, texture warm, content library -------------------------------
 telemetry.init();
 injectAppStyles();
+replayMirror.start();
 // Canvas text bakes whatever face is resolved at paint time — it never
 // reflows when a webfont lands. Wait (bounded) for the bundled Comic Neue so
 // iOS, which has no system 'Comic Sans MS', doesn't paint the UI in fallback.

@@ -31,16 +31,8 @@ export class UiRoot extends Element {
   constructor(canvas) {
     super(0, 0, UI_WIDTH, UI_HEIGHT);
     this.canvas = canvas;
-    // Everything paints in virtual 640x480 space into `backing`; repaint()
-    // blits it into the display canvas, whose backing store tracks its CSS
-    // box (see _fitBuffer) rather than staying fixed at 640x480 — Sentry
-    // replays never upscale a canvas snapshot beyond its bitmap size.
-    this.backing = document.createElement('canvas');
-    this.backing.width = UI_WIDTH; this.backing.height = UI_HEIGHT;
-    this.ctx = this.backing.getContext('2d');
+    this.ctx = canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false; // pixel-perfect scaling of the bitmap art
-    this.out = canvas.getContext('2d');
-    this.out.imageSmoothingEnabled = false;
     this.root = this;
     this.stack = [];            // View objects, top = last
     this.leaving = [];          // popped views fading out — painted ON TOP of the stack
@@ -57,8 +49,7 @@ export class UiRoot extends Element {
     this.captured = null;       // element holding pointer capture
     this.anim = new Animator(() => this.invalidate());
     this._raf = 0;
-    this._fitBuffer();
-    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this._fitBuffer()).observe(canvas);
+    canvas.width = UI_WIDTH; canvas.height = UI_HEIGHT;
     canvas.style.pointerEvents = 'none'; // passive until a view asks for input
     cursorManager.attach(canvas);
     this._bindInput();
@@ -66,20 +57,6 @@ export class UiRoot extends Element {
 
   /** The top view — receives pointer input. */
   get topView() { return this.stack[this.stack.length - 1] || null; }
-
-  /** Size the display canvas's backing store to its CSS box (kept under
-   *  1280px — Sentry's canvas snapshot clamp) so recorded snapshots are never
-   *  smaller than the displayed element and replay fills it correctly. */
-  _fitBuffer() {
-    const r = this.canvas.getBoundingClientRect();
-    if (r.width < 1 || r.height < 1) return; // hidden or pre-layout — keep last size
-    const k = Math.min(1, 1280 / Math.max(r.width, r.height));
-    const w = Math.ceil(r.width * k), h = Math.ceil(r.height * k);
-    if (this.canvas.width === w && this.canvas.height === h) return;
-    this.canvas.width = w; this.canvas.height = h;
-    this.out.imageSmoothingEnabled = false; // buffer resize resets ctx state
-    this.invalidate();
-  }
 
   /** Reassemble the element children from the view layers — leaving-under,
    *  stack, leaving-over, tips, toast — and publish stack depth to the store. */
@@ -196,9 +173,6 @@ export class UiRoot extends Element {
     ctx.clearRect(0, 0, UI_WIDTH, UI_HEIGHT);
     for (const v of this.children) v.paintTree(ctx);
     ctx.restore();
-    // nearest-neighbor blit onto the display canvas — same pixels the old
-    // CSS upscale produced, now at the element's real display resolution
-    this.out.drawImage(this.backing, 0, 0, this.canvas.width, this.canvas.height);
     this.dirtyAll = false; this.dirtyRects.length = 0;
   }
 

@@ -3,7 +3,7 @@ import { test, expect, beforeAll } from 'vitest';
 import { movieFile, contentLibrary } from './helpers.ts';
 
 const ctxStub = () => new Proxy({}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 0 }) : () => {}), set: () => true });
-const elStub = () => new Proxy({ style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }) }, {
+const elStub = () => new Proxy({ style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false } }, {
   get(t, k) {
     if (k in t) return (t as any)[k];
     if (k === 'getContext') return ctxStub;

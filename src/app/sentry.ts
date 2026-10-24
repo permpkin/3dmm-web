@@ -2,6 +2,12 @@ import * as Sentry from '@sentry/browser';
 import { name, version } from '../../package.json';
 // Sentry init — imported first by main.ts so boot-time failures are captured
 // too. No-ops entirely when VITE_SENTRY_DSN isn't set.
+// manual snapshot mode — automatic canvas capture would snapshot #ui at its
+// fixed 640x480 backing res, but Sentry's replayer never upscales a snapshot
+// beyond its bitmap size. replayMirror feeds a display-res copy via
+// replayCanvas.snapshot() instead; every other canvas stays empty in replays.
+export const replayCanvas = Sentry.replayCanvasIntegration({ enableManualSnapshot: true });
+
 if (import.meta.env.VITE_SENTRY_DSN) Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,
   release: `${name}@${version}`,
@@ -11,7 +17,7 @@ if (import.meta.env.VITE_SENTRY_DSN) Sentry.init({
     Sentry.replayIntegration(),
     // the whole UI is canvas — without this replays show a blank page;
     // note canvas pixels are never masked (Sentry can't scrub them)
-    Sentry.replayCanvasIntegration(),
+    replayCanvas,
     Sentry.captureConsoleIntegration({ levels: ['error'] }), // console.error -> Sentry event
     // no floating DOM button — the canvas UI's "report a problem" link opens
     // the dialog via telemetry.report(); the sync variant bundles the modal

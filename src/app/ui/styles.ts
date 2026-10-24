@@ -26,6 +26,7 @@ body { display: flex; flex-direction: column; }
 #rotMsg.show { display: flex; }
 #studio #selBox { display: none; } /* unused — selection is a 3D bounding box in-scene */
 #ui { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; z-index: 55; touch-action: none; }
+#uiMirror { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; } /* sentry replay mirror — same box under #ui */
 `;
   document.head.appendChild(el);
 }
