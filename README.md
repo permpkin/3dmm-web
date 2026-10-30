@@ -38,7 +38,7 @@ JavaScript port of the original 1995 engine behavior.
 
 The easiest way to try it is the hosted build — no install needed:
 
-**https://permpkin.github.io/3dmm-web/**
+**https://3dmm.app**
 
 Or jump straight into a movie — this loads `hospital.3mm` from the
 [3DMMEx](https://github.com/benstone/3DMMEx) samples:
